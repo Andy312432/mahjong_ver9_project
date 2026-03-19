@@ -1,0 +1,7 @@
+/start MJ 2 AI
+/initGame East East 1 1 0
+/initCard 110 120 160 161 210 220 230 221 222 223 240 250 260 261 280 290 
+/throw 1 111
+/mo 291
+/ask throw
+/exit

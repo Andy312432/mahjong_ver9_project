@@ -1,0 +1,20 @@
+/start MJ 1 AI
+/initGame East East 1 1 0
+/initCard 323 421 221 430 463 272 381 380 183 113 160 273 382 121 460 223 473 
+/throw 1 473 1 
+/throw 2 412 1 
+/throw 3 450 1 
+/throw 4 413 1 
+/mo 143
+/throw 1 430 1 
+/throw 2 432 1 
+/throw 3 110 1 
+/throw 4 433 1 
+/mo 112
+/throw 1 421 1 
+/throw 2 411 0 
+/throw 3 431 0 
+/throw 4 472 1 
+/mo 311
+/ask throw
+/exit

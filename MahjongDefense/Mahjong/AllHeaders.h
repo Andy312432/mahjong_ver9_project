@@ -1,0 +1,10 @@
+#include "GameStatue.h"
+
+#include "AI.cpp"
+#include "Player.cpp"
+#include "PredictRemainTiles.cpp"
+#include "PrivateHand.cpp"
+#include "PublicHand.cpp"
+#include "Table.cpp"
+#include "WallTiles.cpp"
+#include "DefenseAnalyze.cpp"

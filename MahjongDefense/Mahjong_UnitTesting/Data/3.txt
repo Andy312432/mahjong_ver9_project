@@ -1,0 +1,63 @@
+/start MJ 4 AI
+/initGame East East 1 1 0
+/initCard 253 142 450 382 152 182 291 210 122 272 282 170 393 362 461 191 
+/throw 1 410 1 
+/throw 2 423 1 
+/throw 3 413 1 
+/mo 433
+/throw 4 461 1 
+/throw 1 462 1 
+/throw 2 250 1 
+/eat 3 262 250 271 
+/throw 3 420 1 
+/mo 160
+/throw 4 433 1 
+/throw 1 443 1 
+/pong 2 443 441 442 
+/throw 2 110 1 
+/throw 3 432 1 
+/mo 321
+/throw 4 450 1 
+/throw 1 430 0 
+/throw 2 470 0 
+/throw 3 473 1 
+/mo 411
+/throw 4 411 0 
+/throw 1 290 1 
+/throw 2 121 1 
+/throw 3 451 1 
+/mo 270
+/throw 4 210 1 
+/throw 1 421 0 
+/throw 2 472 0 
+/throw 3 293 1 
+/mo 140
+/throw 4 393 1 
+/throw 1 111 1 
+/throw 2 240 1 
+/throw 3 212 1 
+/mo 452
+/throw 4 452 0 
+/throw 1 181 1 
+/throw 2 340 1 
+/throw 3 330 1 
+/mo 172
+/throw 4 122 1 
+/eat 1 131 122 141 
+/throw 1 132 1 
+/throw 2 263 0 
+/eat 3 252 263 273 [E P] 
+/throw 3 123 1 
+/mo 233
+/throw 4 270 1 
+/throw 1 260 1 
+/throw 2 322 1 
+/throw 3 133 0 
+/mo 412
+/throw 4 412 0 
+/throw 1 261 1 
+/throw 2 241 1 
+/throw 3 112 1 
+/mo 143
+/ask throw
+/exit

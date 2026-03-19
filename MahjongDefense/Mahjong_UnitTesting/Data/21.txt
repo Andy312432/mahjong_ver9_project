@@ -1,0 +1,36 @@
+/start MJ 3 AI
+/initGame East East 1 2 0
+/initCard 451 290 453 163 133 172 271 361 223 342 390 231 470 141 410 351 
+/throw 2 293 1 
+/mo 310
+/throw 3 410 1 
+/throw 4 411 1 
+/throw 1 422 1 
+/pong 4 422 421 423 
+/throw 4 440 1 
+/throw 1 450 1 
+/throw 2 343 0 
+/mo 341
+/throw 3 470 1 
+/throw 4 460 1 
+/pong 1 460 461 462 
+/throw 1 241 1 
+/throw 2 420 1 
+/mo 262
+/throw 3 310 1 
+/throw 4 282 1 
+/throw 1 243 0 
+/throw 2 312 1 
+/mo 170
+/throw 3 390 1 
+/pong 2 390 391 392 
+/throw 2 153 1 
+/eat 3 141 153 163 
+/throw 3 133 1 
+/eat 4 122 133 110 
+/throw 4 142 1 
+/pong 2 142 140 143 
+/throw 2 222 1 
+/mo 372
+/ask throw
+/exit

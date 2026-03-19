@@ -1,0 +1,30 @@
+/start MJ 2 AI
+/initGame East East 1 1 0
+/initCard 242 450 310 190 162 182 293 193 292 452 311 290 453 260 472 110 
+/throw 1 191 1 
+/pong 2 191 190 193 
+/throw 2 472 1 
+/throw 3 412 1 
+/throw 4 390 1 
+/eat 1 370 390 381 
+/throw 1 213 1 
+/mo 120
+/throw 2 182 1 
+/eat 3 171 182 192 
+/throw 3 473 1 
+/throw 4 223 1 
+/throw 1 352 1 
+/mo 332
+/throw 2 162 1 
+/throw 3 220 1 
+/throw 4 152 1 
+/pong 1 152 150 151 
+/throw 1 160 1 
+/mo 212
+/throw 2 212 0 
+/throw 3 460 1 
+/throw 4 172 0 
+/throw 1 330 1 
+/mo 291
+/ask gong
+/exit

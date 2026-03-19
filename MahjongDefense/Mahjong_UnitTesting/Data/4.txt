@@ -1,0 +1,53 @@
+/start MJ 1 AI
+/initGame East East 1 1 0
+/initCard 260 111 410 351 341 290 443 462 230 222 243 213 232 181 141 261 371 
+/throw 1 410 1 
+/throw 2 423 1 
+/throw 3 413 1 
+/throw 4 461 1 
+/mo 390
+/throw 1 462 1 
+/throw 2 250 1 
+/eat 3 262 250 271 
+/throw 3 420 1 
+/throw 4 433 1 
+/mo 131
+/throw 1 443 1 
+/pong 2 443 441 442 
+/throw 2 110 1 
+/throw 3 432 1 
+/throw 4 450 1 
+/mo 430
+/throw 1 430 0 
+/throw 2 470 0 
+/throw 3 473 1 
+/throw 4 411 0 
+/mo 333
+/throw 1 290 1 
+/throw 2 121 1 
+/throw 3 451 1 
+/throw 4 210 1 
+/mo 421
+/throw 1 421 0 
+/throw 2 472 0 
+/throw 3 293 1 
+/throw 4 393 1 
+/mo 132
+/throw 1 111 1 
+/throw 2 240 1 
+/throw 3 212 1 
+/throw 4 452 0 
+/mo 381
+/throw 1 181 1 
+/throw 2 340 1 
+/throw 3 330 1 
+/throw 4 122 1 
+/eat 1 131 122 141 
+/throw 1 132 1 
+/throw 2 263 0 
+/eat 3 252 263 273 [E P] 
+/throw 3 123 1 
+/throw 4 270 1 
+/mo 352
+/ask throw
+/exit

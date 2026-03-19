@@ -1,0 +1,82 @@
+/start MJ 3 AI
+/initGame East East 1 1 0
+/initCard 462 422 381 260 142 230 140 363 223 153 222 361 141 433 133 192 
+/throw 1 421 1 
+/throw 2 292 1 
+/mo 143
+/throw 3 422 W G 1 
+/throw 4 411 1 
+/throw 1 431 1 
+/throw 2 440 0 
+/mo 132
+/throw 3 433 W G 1 
+/throw 4 430 1 
+/throw 1 172 1 
+/eat 2 181 172 190 
+/throw 2 410 1 
+/mo 322
+/throw 3 462 W G 1 
+/throw 4 443 1 
+/throw 1 171 0 
+/throw 2 290 0 
+/mo 250
+/throw 3 192 W G 1 
+/throw 4 281 1 
+/pong 1 281 280 283 
+/throw 1 270 1 
+/throw 2 470 1 
+/mo 193
+/throw 3 193 W G 0 
+/throw 4 211 1 
+/pong 1 211 210 212 
+/throw 1 311 1 
+/pong 2 311 310 313 
+/throw 2 261 1 
+/mo 152
+/throw 3 152 W G 0 
+/throw 4 161 1 
+/throw 1 320 1 
+/throw 2 233 1 
+/mo 291
+/throw 3 291 W G 0 
+/throw 4 251 1 
+/throw 1 473 0 
+/throw 2 110 S G 1 
+/mo 423
+/throw 3 423 W G 0 
+/throw 4 162 1 
+/throw 1 220 1 
+/pong 3 220 222 223 
+/throw 3 230 1 
+/eat 4 243 230 253 
+/throw 4 112 1 
+/throw 1 460 0 
+/throw 2 420 S G 0 
+/mo 353
+/throw 3 322 W G 1 
+/throw 4 121 1 
+/pong 1 121 122 123 
+/throw 1 240 1 
+/throw 2 120 S G 1 
+/eat 3 132 120 140 
+/throw 3 133 1 
+/throw 4 273 0 
+/throw 1 231 0 
+/throw 2 413 S G 0 
+/mo 333
+/throw 3 153 1 
+/throw 4 471 0 
+/throw 1 130 1 
+/throw 2 131 S G 0 
+/mo 163
+/throw 3 163 0 
+/throw 4 461 0 
+/throw 1 150 1 
+/throw 2 452 S G 0 
+/pong 4 452 450 453 
+/throw 4 321 1 
+/throw 1 221 0 
+/throw 2 441 S G 0 
+/mo 263
+/ask throw
+/exit
