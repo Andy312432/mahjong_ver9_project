@@ -957,39 +957,49 @@ vector<int> AI::dealPong() {
 	std::vector<int> result;
 	if (mode == 0) {
 		if (board.predictRemainTiles.getRemainTotalTilesNum() - 64 + oppGroup <= 16 && board.listenNum > 0) {
-			return result;
+			return result;//剩不多排就流局、且自己離聽牌很遠：不碰了
 		}
-		int tempArray[17] = { 0 };
-		int tempNumArray[17] = { 0 };
-		int length = board.privateHand.getTileNumArray(tempArray, tempNumArray);
+		int tempArray[17] = { 0 };//不重複的手排名單 AI定義
+		int tempNumArray[17] = { 0 };//上者各自的個數
+		int length = board.privateHand.getTileNumArray(tempArray, tempNumArray);//手排數量(不含重複?)
 		int seaCard = (wallTiles.getTileSea() / 100 - 1) * 9 + (wallTiles.getTileSea() / 10 % 10 - 1);
 		int move = -1;
 
-		for (int i = 0; i < length; ++i) {	//Pong
-			if (tempArray[i] == seaCard && tempNumArray[i] >= 2) {
+		for (int i = 0; i < length; ++i) {
+			if (tempArray[i] == seaCard && tempNumArray[i] >= 2) {//可以碰的條件
 				table->UpdateTableID(board.tableID, tempArray[i], THROW);
 				table->UpdateTableID(board.tableID, tempArray[i], THROW);
 				int listenNum(table->getTilesListenNum(4 - board.publicGroupNum, board.tableID, board.is_have_eyes));
 				//printf("%d %d\n", BBlistenNum, currentListenNum);
-				if (listenNum < board.listenNum) {
+				if (listenNum < board.listenNum) {//假設丟了之後可以改善上聽數
 					move = tempArray[i];
-					if (tempArray[i] / 9 != 3 
-						&& i > 0 && (i + 1) < length && tempArray[i - 1] + 1 == tempArray[i] && tempArray[i + 1] - 1 == tempArray[i]
-						&& tempNumArray[i - 1] == 1 && tempNumArray[i + 1] == 1
-						&& ((i > 1 && (i + 2) < length && tempArray[i - 2] + 2 != tempArray[i] && tempArray[i + 2] - 2 != tempArray[i])
-							|| ((i + 2) < length && tempArray[i + 2] - 2 != tempArray[i])
-							|| (i > 1 && tempArray[i - 2] + 2 != tempArray[i]))) {
+
+					bool isNumberTile = tempArray[i] / 9 != 3;
+					bool atMiddleHasNeighbors = //左右有連續排且只有一個 e.g 5667
+						(i > 0) && (i + 1 < length) &&//不是邊張 e.g: 5677
+						tempArray[i - 1] + 1 == tempArray[i] && tempArray[i + 1] - 1 == tempArray[i] &&
+						tempNumArray[i - 1] == 1 && tempNumArray[i + 1] == 1;//左右只有一個
+
+					bool connectedToFarLeft =
+						(i > 1) && (tempArray[i - 2] + 2 == tempArray[i]);
+
+					bool connectedToFarRight =
+						(i + 2 < length) && (tempArray[i + 2] - 2 == tempArray[i]);
+
+					if (isNumberTile && atMiddleHasNeighbors
+						&& !connectedToFarLeft && !connectedToFarRight) {//滿足條件->不丟
 							table->UpdateTableID(board.tableID, tempArray[i], TAKE);
 							table->UpdateTableID(board.tableID, tempArray[i], TAKE);
 							return result;
 					}
 				}
+				//不滿足條件
 				table->UpdateTableID(board.tableID, tempArray[i], TAKE);
 				table->UpdateTableID(board.tableID, tempArray[i], TAKE);
 				break;
 			}
 		}
-		if (move != -1) {
+		if (move != -1) {//沒有滿足976-083各種條件的話，但可以改善上聽數->丟
 			int card1 = ((move / 9) + 1) * 100 + ((move % 9) + 1) * 10;
 			int count = 0;
 #if (SHOW_INFORMATION && !STDIN)
@@ -1011,7 +1021,7 @@ vector<int> AI::dealPong() {
 			printf("\n");
 #endif
 		}
-		else {
+		else {//沒有改善上聽數->pass
 #if (SHOW_INFORMATION && !STDIN)
 			printf("Sugesstion: pass\n");
 #endif
@@ -1325,7 +1335,7 @@ vector<int> AI::dealThrow() {
 		}
 		else if (throwArraySize == 1) {
 			int card1 = ((throwList[0] / 9) + 1) * 100 + ((throwList[0] % 9) + 1) * 10;
-			for (int j = 0; j < 4; ++j) {
+			for (int j = 0; j < 4; ++j) {//有四張卡，一定會找到
 				int cardId = card1 + j;
 				if (privateHand.findCard(cardId) == true) {
 					result.push_back(cardId);
