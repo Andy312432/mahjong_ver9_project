@@ -15,7 +15,43 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="..\Mahjong\AI.cpp">
+      <Filter>來源檔案</Filter>
+    </ClCompile>
     <ClCompile Include="..\Mahjong\ClientSocketMain.cpp">
+      <Filter>來源檔案</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Mahjong\DefenseAnalyze.cpp">
+      <Filter>來源檔案</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Mahjong\Game.cpp">
+      <Filter>來源檔案</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Mahjong\Human.cpp">
+      <Filter>來源檔案</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Mahjong\Player.cpp">
+      <Filter>來源檔案</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Mahjong\PredictRemainTiles.cpp">
+      <Filter>來源檔案</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Mahjong\PrivateHand.cpp">
+      <Filter>來源檔案</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Mahjong\PublicHand.cpp">
+      <Filter>來源檔案</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Mahjong\Table.cpp">
+      <Filter>來源檔案</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Mahjong\TT.cpp">
+      <Filter>來源檔案</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Mahjong\Tools.cpp">
+      <Filter>來源檔案</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Mahjong\WallTiles.cpp">
       <Filter>來源檔案</Filter>
     </ClCompile>
     <ClCompile Include="..\Mahjong\ClientSocket.cpp">
