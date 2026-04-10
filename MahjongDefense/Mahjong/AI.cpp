@@ -37,7 +37,7 @@
 #define SHOW_INFORMATION 1
 #define SHOW_WIN_RATE 1
 #define SHOW_THROW_LIST 1
-#define SHOW_DISMANTLING_RESULT 0
+#define SHOW_DISMANTLING_RESULT 1
 
 #define LOG_TIME_AND_TREESIZE
 #define LOG_COLLISION // Modified
@@ -166,31 +166,31 @@ inline bool AI::isTimeUp() {
 
 constexpr int AI::whos_turn(const Board& b) {
 	switch (b.status) {
-		case OnePlay:
-			return PLAYER1;
-		case TwoPlay:
-			return PLAYER2;
-		case ThreePlay:
-			return PLAYER3;
-		case FourPlay:
-			return PLAYER4;
-		default:
-			return NONE;
+	case OnePlay:
+		return PLAYER1;
+	case TwoPlay:
+		return PLAYER2;
+	case ThreePlay:
+		return PLAYER3;
+	case FourPlay:
+		return PLAYER4;
+	default:
+		return NONE;
 	}
 }
 
 constexpr int AI::who_won(const Board& b) {
 	switch (b.status) {
-		case OneWin:
-			return PLAYER1;
-		case TwoWin:
-			return PLAYER2;
-		case ThreeWin:
-			return PLAYER3;
-		case FourWin:
-			return PLAYER4;
-		default:
-			return NONE;
+	case OneWin:
+		return PLAYER1;
+	case TwoWin:
+		return PLAYER2;
+	case ThreeWin:
+		return PLAYER3;
+	case FourWin:
+		return PLAYER4;
+	default:
+		return NONE;
 	}
 }
 
@@ -273,7 +273,7 @@ inline int AI::ThrowList(Board& b, int* throwArray) {
 int AI::ThrowTilesAnalysis(Board& b, ThrowSet* newDismantlingResult, int* startPosition, int* throwTiles, int(*throwContentType)[4], const int& startPositionSize) {
 	char pairListenTilesNum[90][8] = { 0 }, pairListenHoleNum[90][8] = { 0 }, tatsuListenTilesNum[90][16] = { 0 }, tatsuListenHoleNum[90][16] = { 0 }
 	, oneListenTilesNum[90][17] = { 0 }, totalListenTilesNum[90] = { 0 }, totalListenHoleNum[90] = { 0 }, minListenSingleTileNum[90];
-	char wordTiles[90][17] = { 0 }, eyeTiles[90][8] = { 0 }, tatsuTiles[90][16] = { 0 }, totalSize[90] = {0};
+	char wordTiles[90][17] = { 0 }, eyeTiles[90][8] = { 0 }, tatsuTiles[90][16] = { 0 }, totalSize[90] = { 0 };
 	char minListenTileNum(100), maxTotalListenTileNum(-100), maxHoleNum(-100), minListenHoleNum(100), minSize = 125;
 	int  wordTileSize[90] = { 0 }, eyeTileSize[90] = { 0 }, tatsuTileSize[90] = { 0 }, pairListenTilesSize[90] = { 0 }, tatsuListenTilesSize[90] = { 0 }, oneListenTilesSize[90] = { 0 }
 	, candidate[90], candidateSize = 0, recordIndex = 0, throwArraySize = 0;
@@ -369,7 +369,7 @@ int AI::ThrowTilesAnalysis(Board& b, ThrowSet* newDismantlingResult, int* startP
 							++tatsuListenHoleNum[index][tatsuListenTilesSize[index] + (j >> 1)];
 							++totalListenHoleNum[index];
 						}
-						else {							
+						else {
 							tatsuTiles[index][tatsuTileSize[index]++] = newDismantlingResult[i].tatsu[j] + throwContentType[index][g] * 9;
 							tatsuTiles[index][tatsuTileSize[index]++] = newDismantlingResult[i].tatsu[j + 1] + throwContentType[index][g] * 9;
 						}
@@ -485,7 +485,7 @@ int AI::ThrowTilesAnalysis(Board& b, ThrowSet* newDismantlingResult, int* startP
 
 	// can't listen
 	if (eyeTileSize[recordIndex] || tatsuTileSize[recordIndex]) {
-		int tempArray[17] = {0}, tempNumArray[17] = {0};
+		int tempArray[17] = { 0 }, tempNumArray[17] = { 0 };
 		int length = b.privateHand.getTileNumArray(tempArray, tempNumArray);
 		bool isEyes = false;
 		for (int i = 0; i < length; ++i) {
@@ -521,8 +521,8 @@ int AI::ThrowTilesAnalysis(Board& b, ThrowSet* newDismantlingResult, int* startP
 			for (int j = 0; j < newDismantlingResult[i].oneSize; j++) {
 				bool find_3 = false;
 				for (int a = 0; a < newDismantlingResult[i].pairSize; a++) {
-					if (newDismantlingResult[i].pair[a] < 9 && (newDismantlingResult[i].pair[a] - 1 == newDismantlingResult[i].one[j] 
-						|| newDismantlingResult[i].pair[a] + 1 == newDismantlingResult[i].one[j] 
+					if (newDismantlingResult[i].pair[a] < 9 && (newDismantlingResult[i].pair[a] - 1 == newDismantlingResult[i].one[j]
+						|| newDismantlingResult[i].pair[a] + 1 == newDismantlingResult[i].one[j]
 						|| newDismantlingResult[i].pair[a] - 2 == newDismantlingResult[i].one[j]
 						|| newDismantlingResult[i].pair[a] + 2 == newDismantlingResult[i].one[j])) {
 						if (b.predictRemainTiles.getRemainTilesNum(newDismantlingResult[i].pair[a] + throwContentType[recordIndex][g] * 9) >= 2) {
@@ -548,11 +548,11 @@ int AI::ThrowTilesAnalysis(Board& b, ThrowSet* newDismantlingResult, int* startP
 				if ((tempNumArray[index] == 1 && ((index != 0 && (tempArray[index - 1] + 1 == tempArray[index] || tempArray[index - 1] + 2 == tempArray[index]) && tempNumArray[index - 1] == 2) ||
 					(index + 1 != length && (tempArray[index + 1] - 1 == tempArray[index] || tempArray[index + 1] - 2 == tempArray[index]) && tempNumArray[index + 1] == 2))) ||
 					(tempNumArray[index] == 2 && ((index != 0 && (tempArray[index - 1] + 1 == tempArray[index] || tempArray[index - 1] + 2 == tempArray[index]) && tempNumArray[index - 1] == 1) ||
-					(index + 1 != length && (tempArray[index + 1] - 1 == tempArray[index] || tempArray[index + 1] - 2 == tempArray[index]) && tempNumArray[index + 1] == 1))) ||	
+						(index + 1 != length && (tempArray[index + 1] - 1 == tempArray[index] || tempArray[index + 1] - 2 == tempArray[index]) && tempNumArray[index + 1] == 1))) ||
 					(tempNumArray[index] == 1 && ((index - 2 >= 0 && tempArray[index - 2] + 2 == tempArray[index] && tempNumArray[index - 2] == 2) ||
-					(index + 2 != length && tempArray[index + 2] - 2 == tempArray[index] && tempNumArray[index + 2] == 2))) ||
+						(index + 2 != length && tempArray[index + 2] - 2 == tempArray[index] && tempNumArray[index + 2] == 2))) ||
 					(tempNumArray[index] == 2 && ((index - 2 >= 0 && tempArray[index - 2] + 2 == tempArray[index] && tempNumArray[index - 2] == 1) ||
-					(index + 2 != length && tempArray[index + 2] - 2 == tempArray[index] && tempNumArray[index + 2] == 1)))) {
+						(index + 2 != length && tempArray[index + 2] - 2 == tempArray[index] && tempNumArray[index + 2] == 1)))) {
 					continue;
 				}
 				if (newDismantlingResult[i].one[j] == 0 || newDismantlingResult[i].one[j] == 8) {
@@ -657,7 +657,7 @@ int AI::ThrowTilesAnalysis(Board& b, ThrowSet* newDismantlingResult, int* startP
 		return remainTileSize;
 	}
 
-	if (meldNum >= 7) {		
+	if (meldNum >= 7) {
 		for (int i = startPosition[recordIndex], g = 0; i < startPosition[recordIndex + 1]; i++, g++) {
 			for (int j = 0; j < newDismantlingResult[i].tatsuSize << 1; j += 2) {
 				throwTiles[throwArraySize++] = newDismantlingResult[i].tatsu[j] + throwContentType[recordIndex][g] * 9;
@@ -709,7 +709,7 @@ int AI::ThrowTilesAnalysis(Board& b, ThrowSet* newDismantlingResult, int* startP
 					throwTiles[throwArraySize++] = tempArray[i];
 				}
 			}
-		}		
+		}
 		return throwArraySize;
 	}
 
@@ -901,7 +901,7 @@ vector<int> AI::dealEat() {
 					(max < validTileNum[a] || (max == validTileNum[a] && listenTilesNum[pos] > listenTilesNum[a]))) {
 					max = validTileNum[a];
 					pos = a;
-				}			
+				}
 				//printf("%d %d %d %d\n", moveArray[a], listenTilesNum[a], validTileNum[a], ishaveEyesArray[a]);
 			}
 
@@ -988,9 +988,9 @@ vector<int> AI::dealPong() {
 
 					if (isNumberTile && atMiddleHasNeighbors
 						&& !connectedToFarLeft && !connectedToFarRight) {//滿足條件->不丟
-							table->UpdateTableID(board.tableID, tempArray[i], TAKE);
-							table->UpdateTableID(board.tableID, tempArray[i], TAKE);
-							return result;
+						table->UpdateTableID(board.tableID, tempArray[i], TAKE);
+						table->UpdateTableID(board.tableID, tempArray[i], TAKE);
+						return result;
 					}
 				}
 				//不滿足條件
@@ -1053,7 +1053,7 @@ vector<int> AI::dealMingGong() {
 				table->UpdateTableID(board.tableID, tempArray[i], THROW);
 				table->UpdateTableID(board.tableID, tempArray[i], THROW);
 				int listenNum(table->getTilesListenNum(4 - board.publicGroupNum, board.tableID, board.is_have_eyes));
-				if (listenNum == board.listenNum) {			
+				if (listenNum == board.listenNum) {
 					table->UpdateTableID(board.tableID, tempArray[i], TAKE);
 
 					if (table->getTilesListenNum(4 - board.publicGroupNum, board.tableID, board.is_have_eyes) < board.listenNum) {
@@ -1224,7 +1224,7 @@ vector<int> AI::dealThrow() {
 			}
 			int tempArraySize = 0;
 			for (int i = 0; i < throwArraySize; i++) {
-				if (minRiskNum == riskArray[i]) {					
+				if (minRiskNum == riskArray[i]) {
 					throwList[tempArraySize++] = throwList[i];
 				}
 			}
@@ -1240,7 +1240,7 @@ vector<int> AI::dealThrow() {
 				}
 			}
 		}
-		else*/ 
+		else*/
 		if (DefenseAnalyze::shouldDefend(board.myPosition, publicHand)) {
 #if (SHOW_INFORMATION && !STDIN)
 			printf(">>> The opponent has two groups of secondary Luda and activates the defensive mode！ <<<\n");
@@ -1274,7 +1274,7 @@ vector<int> AI::dealThrow() {
 			int tempNumArray[17] = { 0 };
 			//int minRemain = 9999, minTile = -1;
 			int length = board.privateHand.getTileNumArray(tempArray, tempNumArray);
-			int riskArray[17] = {0}, minRiskNum = 999;
+			int riskArray[17] = { 0 }, minRiskNum = 999;
 			for (int i = 0; i < length; ++i) {
 				if (tempArray[i] / 9 != 3 && tempArray[i] % 9 - 2 >= 0) {
 					if (board.predictRemainTiles.getRemainTilesNum(tempArray[i] - 2) > 0 && board.predictRemainTiles.getRemainTilesNum(tempArray[i] - 1) > 0) {
@@ -1377,27 +1377,27 @@ vector<int> AI::dealThrow() {
 			}
 		}
 #if (CLOSE_MCS == 0)
-		clock_t totalStart = clock(); 
+		clock_t totalStart = clock();
 		MCTS(board, throwList, throwArraySize);
-		totalDuration = (double)(clock() - totalStart) * 1000 / CLOCKS_PER_SEC; 
-		
+		totalDuration = (double)(clock() - totalStart) * 1000 / CLOCKS_PER_SEC;
+
 #ifdef LOG_TIME_AND_TREESIZE
 		{
 			// Log time and treeSize, with remainTilesTotal
-			std::string fileName = "timeLog" + std::to_string(getID()) + ".csv"; 
-			std::ofstream timeLog(fileName, std::ios::app); 
-			timeLog << board.predictRemainTiles.getRemainTotalTilesNum() << "," << totalDuration << "\n"; 
-			timeLog.close(); 
+			std::string fileName = "timeLog" + std::to_string(getID()) + ".csv";
+			std::ofstream timeLog(fileName, std::ios::app);
+			timeLog << board.predictRemainTiles.getRemainTotalTilesNum() << "," << totalDuration << "\n";
+			timeLog.close();
 
-			fileName = "treeSizeLog" + std::to_string(getID()) + ".csv"; 
-			std::ofstream treeSizeLog(fileName, std::ios::app); 
-			treeSizeLog << board.predictRemainTiles.getRemainTotalTilesNum() << "," << treeSize << "\n"; 
-			treeSizeLog.close(); 
+			fileName = "treeSizeLog" + std::to_string(getID()) + ".csv";
+			std::ofstream treeSizeLog(fileName, std::ios::app);
+			treeSizeLog << board.predictRemainTiles.getRemainTotalTilesNum() << "," << treeSize << "\n";
+			treeSizeLog.close();
 		}
 #endif
 #endif
 		if (throwArraySize > 0) {
-			int winRateIndexArray[17] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 ,11, 12, 13, 14, 15, 16};
+			int winRateIndexArray[17] = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 ,11, 12, 13, 14, 15, 16 };
 			QuickSort(winRateIndexArray, 0, nodes[0].childrenNum - 1); /// 將children依照勝率(average)排序
 
 			for (int i = 0; i < throwArraySize; i++) std::cout << throwList[winRateIndexArray[i]] << " "; // Debug
@@ -1410,7 +1410,7 @@ vector<int> AI::dealThrow() {
 			table->UpdateTableID(board.tableID, throwList[winRateIndexArray[0]], THROW); /// 丟棄勝率最高的牌
 			for (int i = 0; i < 3; ++i) { /// 數牌
 				if (board.tableID[i] != 0) { /// 試試每種牌，如果場上還有該牌且得到該牌會降低進聽數，則maxValid++
-					for (int b = i * 9; b < i*9 + 9; ++b) {
+					for (int b = i * 9; b < i * 9 + 9; ++b) {
 						if (board.predictRemainTiles.getRemainTilesNum(b) > 0) {
 							table->UpdateTableID(board.tableID, b, TAKE);
 							if (board.listenNum > table->getTilesListenNum(5 - board.publicGroupNum, board.tableID, board.is_have_eyes)) {
@@ -1437,7 +1437,7 @@ vector<int> AI::dealThrow() {
 			record = winRateIndexArray[0];
 
 			for (int a = 1; a < nodes[0].childrenNum; ++a) {
-				if (nodes[nodes[0].childIndex[winRateIndexArray[0]]].averageScore - nodes[nodes[0].childIndex[winRateIndexArray[a]]].averageScore <= 0.015){
+				if (nodes[nodes[0].childIndex[winRateIndexArray[0]]].averageScore - nodes[nodes[0].childIndex[winRateIndexArray[a]]].averageScore <= 0.015) {
 					table->UpdateTableID(board.tableID, throwList[winRateIndexArray[a]], THROW);
 					int validNum = 0;
 					for (int i = 0; i < 3; ++i) {
@@ -1478,9 +1478,9 @@ vector<int> AI::dealThrow() {
 				else {
 					break;
 				}
-			}		
+			}
 
-			if (maxValidArraySize >= 2) {				
+			if (maxValidArraySize >= 2) {
 				int max_appear_num = wallTiles.getTileSeaTileNum(throwList[maxValidArray[0]]), min_second_comparison_num = 0;
 				if (throwList[maxValidArray[0]] % 9 != 0) {
 					min_second_comparison_num += 4 - wallTiles.getTileSeaTileNum(throwList[maxValidArray[0]] - 1);
@@ -1611,67 +1611,67 @@ inline void AI::MakeTake(Board& b, const int& player, const int& action) {
 	int card1 = (action >> 3) & 63, code = action & 7;
 
 	switch (code) {
-		case TAKE: {
-			int cards = b.predictRemainTiles.TakeTile();
-			b.takeTile = cards;
-			b.privateHand.AddHand(cards, hashKey); // Modified
-			table->UpdateTableID(b.tableID, cards, TAKE);
-			break;
-		}
-		case EAT: {
-			int card2 = action >> 12;
-			b.takeTile = card1;
-			b.publicGroupNum++;
-			b.privateHand.RemoveHand(card1, hashKey); // Modified
-			b.privateHand.RemoveHand(card2, hashKey); // Modified
-			table->UpdateTableID(b.tableID, card1, THROW);
-			table->UpdateTableID(b.tableID, card2, THROW);
-			break;
-		}
-		case PONG: {
-			b.takeTile = card1;
-			b.publicGroupNum++;
-			b.privateHand.RemoveHand(card1, hashKey); // Modified
-			b.privateHand.RemoveHand(card1, hashKey); // Modified
-			table->UpdateTableID(b.tableID, card1, THROW);
-			table->UpdateTableID(b.tableID, card1, THROW);
-			break;
-		}
-		case MING_GONG: {
-			b.takeTile = -1;
-			b.publicGroupNum++;
-			for (int i = 0; i < 3; ++i) {
-				b.privateHand.RemoveHand(card1, hashKey); // Modified
-				table->UpdateTableID(b.tableID, card1, THROW);
-			}
-			int cards = b.predictRemainTiles.TakeTile();
-			b.privateHand.AddHand(cards, hashKey); // Modified
-			table->UpdateTableID(b.tableID, cards, TAKE);
-			break;
-		}
-		case DARK_GONG: {
-			b.takeTile = -1;
-			b.publicGroupNum++;
-			for (int i = 0; i < 4; ++i) {
-				b.privateHand.RemoveHand(card1, hashKey); // Modified
-				table->UpdateTableID(b.tableID, card1, THROW);
-			}
-			int cards = b.predictRemainTiles.TakeTile();
-			b.privateHand.AddHand(cards, hashKey); // Modified
-			table->UpdateTableID(b.tableID, cards, TAKE);
-			break;
-		}
-		case BU_GONG: {
-			b.takeTile = -1;
+	case TAKE: {
+		int cards = b.predictRemainTiles.TakeTile();
+		b.takeTile = cards;
+		b.privateHand.AddHand(cards, hashKey); // Modified
+		table->UpdateTableID(b.tableID, cards, TAKE);
+		break;
+	}
+	case EAT: {
+		int card2 = action >> 12;
+		b.takeTile = card1;
+		b.publicGroupNum++;
+		b.privateHand.RemoveHand(card1, hashKey); // Modified
+		b.privateHand.RemoveHand(card2, hashKey); // Modified
+		table->UpdateTableID(b.tableID, card1, THROW);
+		table->UpdateTableID(b.tableID, card2, THROW);
+		break;
+	}
+	case PONG: {
+		b.takeTile = card1;
+		b.publicGroupNum++;
+		b.privateHand.RemoveHand(card1, hashKey); // Modified
+		b.privateHand.RemoveHand(card1, hashKey); // Modified
+		table->UpdateTableID(b.tableID, card1, THROW);
+		table->UpdateTableID(b.tableID, card1, THROW);
+		break;
+	}
+	case MING_GONG: {
+		b.takeTile = -1;
+		b.publicGroupNum++;
+		for (int i = 0; i < 3; ++i) {
 			b.privateHand.RemoveHand(card1, hashKey); // Modified
 			table->UpdateTableID(b.tableID, card1, THROW);
-			int cards = b.predictRemainTiles.TakeTile();
-			b.privateHand.AddHand(cards, hashKey); // Modified
-			table->UpdateTableID(b.tableID, cards, TAKE);
-			break;
 		}
-		default:
-			break;
+		int cards = b.predictRemainTiles.TakeTile();
+		b.privateHand.AddHand(cards, hashKey); // Modified
+		table->UpdateTableID(b.tableID, cards, TAKE);
+		break;
+	}
+	case DARK_GONG: {
+		b.takeTile = -1;
+		b.publicGroupNum++;
+		for (int i = 0; i < 4; ++i) {
+			b.privateHand.RemoveHand(card1, hashKey); // Modified
+			table->UpdateTableID(b.tableID, card1, THROW);
+		}
+		int cards = b.predictRemainTiles.TakeTile();
+		b.privateHand.AddHand(cards, hashKey); // Modified
+		table->UpdateTableID(b.tableID, cards, TAKE);
+		break;
+	}
+	case BU_GONG: {
+		b.takeTile = -1;
+		b.privateHand.RemoveHand(card1, hashKey); // Modified
+		table->UpdateTableID(b.tableID, card1, THROW);
+		int cards = b.predictRemainTiles.TakeTile();
+		b.privateHand.AddHand(cards, hashKey); // Modified
+		table->UpdateTableID(b.tableID, cards, TAKE);
+		break;
+	}
+	default:
+		break;
 	}
 
 	if (isHu(b, b.publicGroupNum)) {
@@ -2467,7 +2467,7 @@ inline int AI::Simulate(const Board& a, const int& throwCard) {
 				}
 					printf("\n");*/
 				b.privateHand.ShowPrivateHandName();
-				
+
 				std::cout << "*****Line 2441 ThroList Empty*****\n" << std::flush; // Debug
 				throw std::invalid_argument("ThrowList Empty.");
 			}
@@ -2627,10 +2627,10 @@ double AI::UCB(const int& nodeIndex, const std::atomic<int>& treeSimTimes) {
 	return nodes[nodeIndex].averageScore + _C_ * sqrt(log((double)treeSimTimes) / nodes[nodeIndex].totalSimTimes);
 }
 
-void AI::backwardPropagation(const int& startIndex, const double& newAvg, const int& newSimTimes){
+void AI::backwardPropagation(const int& startIndex, const double& newAvg, const int& newSimTimes) {
 	int ptr = startIndex;
 	while (ptr != 0) {
- 		int originalSimTimes = nodes[ptr].totalSimTimes;
+		int originalSimTimes = nodes[ptr].totalSimTimes;
 		nodes[ptr].totalSimTimes += newSimTimes;
 		nodes[ptr].averageScore = (newSimTimes * newAvg) + (originalSimTimes * nodes[ptr].averageScore);
 		nodes[ptr].averageScore /= nodes[ptr].totalSimTimes;
@@ -2643,234 +2643,234 @@ inline void AI::MCTS(const Board& currentBoard, const int* throwList, const int&
 		//std::cout << "new round\n"; // Debug
 		//for (int i = 0; i < TT_SIZE; i++) tt[i].simNum = 0; // Debug
 		// Check if throwList is empty or not
-		if (throwListSize == 0) throw std::invalid_argument("In MCTS: ThrowList of current board is empty,\n");
+	if (throwListSize == 0) throw std::invalid_argument("In MCTS: ThrowList of current board is empty,\n");
 
-		unsigned int treeSimTimes = 0;
+	unsigned int treeSimTimes = 0;
 
-		// For TT
-		boost::multiprecision::uint256_t queryKey; // Modified
-		unsigned int hashIndex; // Modified
-		short specificTileNum;
+	// For TT
+	boost::multiprecision::uint256_t queryKey; // Modified
+	unsigned int hashIndex; // Modified
+	short specificTileNum;
 #ifdef LOG_COLLISION // Modified
-		unsigned int hitNum = 0, clsNum = 0;  // Modified
+	unsigned int hitNum = 0, clsNum = 0;  // Modified
 #endif
 
-		// Maintain throwIndex table: thrownTile[throwntile] = index in throwList
-		int thrownTileToIndex[34] = { -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1 };
-		for (int i = 0; i < throwListSize; i++)
-			thrownTileToIndex[throwList[i]] = i;
+	// Maintain throwIndex table: thrownTile[throwntile] = index in throwList
+	int thrownTileToIndex[34] = { -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1 };
+	for (int i = 0; i < throwListSize; i++)
+		thrownTileToIndex[throwList[i]] = i;
 
-		// Initialize root: nodes[0]
-		nodes[0].averageScore = 0;
-		nodes[0].childrenNum = throwListSize;
-		nodes[0].depth = 0;
-		nodes[0].drawnTile = -1;
-		nodes[0].isTerminateNode = false;
-		nodes[0].parentIndex = -1;
-		nodes[0].throwTile = -1;
-		nodes[0].totalSimTimes = 0;
+	// Initialize root: nodes[0]
+	nodes[0].averageScore = 0;
+	nodes[0].childrenNum = throwListSize;
+	nodes[0].depth = 0;
+	nodes[0].drawnTile = -1;
+	nodes[0].isTerminateNode = false;
+	nodes[0].parentIndex = -1;
+	nodes[0].throwTile = -1;
+	nodes[0].totalSimTimes = 0;
 
-		// First-layer expansion, simulation, and backward propagation
-		for (int i = 0; i < throwListSize; i++) {
-			// Initialize nodes[1 + i]
-			nodes[0].childIndex[i] = i + 1;
-			nodes[i + 1].averageScore = 0;
-			nodes[i + 1].childrenNum = 0;
-			nodes[i + 1].depth = 1;
-			nodes[i + 1].drawnTile = -1;
-			nodes[i + 1].isTerminateNode = false;
-			nodes[i + 1].parentIndex = 0;
-			nodes[i + 1].throwTile = throwList[i];
-			nodes[i + 1].totalSimTimes = 0;
+	// First-layer expansion, simulation, and backward propagation
+	for (int i = 0; i < throwListSize; i++) {
+		// Initialize nodes[1 + i]
+		nodes[0].childIndex[i] = i + 1;
+		nodes[i + 1].averageScore = 0;
+		nodes[i + 1].childrenNum = 0;
+		nodes[i + 1].depth = 1;
+		nodes[i + 1].drawnTile = -1;
+		nodes[i + 1].isTerminateNode = false;
+		nodes[i + 1].parentIndex = 0;
+		nodes[i + 1].throwTile = throwList[i];
+		nodes[i + 1].totalSimTimes = 0;
 
-			// Genrate the key that represent the board without throwList[i]
-			specificTileNum = currentBoard.privateHand.getTileNum(throwList[i]); // Modified
-			queryKey = hashKey ^ tileNumHash[(throwList[i] << 2) + specificTileNum - 1]; // Modified
-			if (specificTileNum > 1) queryKey ^= tileNumHash[(throwList[i] << 2) + specificTileNum - 2]; // Modified
-			hashIndex = (unsigned int)(queryKey & mask);
-			if (tt[hashIndex].simNum >= SIMULATION_NUM && tt[hashIndex].key == queryKey) { // Hit
+		// Genrate the key that represent the board without throwList[i]
+		specificTileNum = currentBoard.privateHand.getTileNum(throwList[i]); // Modified
+		queryKey = hashKey ^ tileNumHash[(throwList[i] << 2) + specificTileNum - 1]; // Modified
+		if (specificTileNum > 1) queryKey ^= tileNumHash[(throwList[i] << 2) + specificTileNum - 2]; // Modified
+		hashIndex = (unsigned int)(queryKey & mask);
+		if (tt[hashIndex].simNum >= SIMULATION_NUM && tt[hashIndex].key == queryKey) { // Hit
 #ifdef LOG_COLLISION
-				hitNum++; // Modified
+			hitNum++; // Modified
 #endif
-				nodes[i + 1].totalSimTimes = tt[hashIndex].simNum; // Modified
-				nodes[i + 1].averageScore = (double)tt[hashIndex].simScore / tt[hashIndex].simNum; // Modified
+			nodes[i + 1].totalSimTimes = tt[hashIndex].simNum; // Modified
+			nodes[i + 1].averageScore = (double)tt[hashIndex].simScore / tt[hashIndex].simNum; // Modified
 
-				treeSimTimes += tt[hashIndex].simNum; // Modified
+			treeSimTimes += tt[hashIndex].simNum; // Modified
+		}
+		else { // Modified
+			if (tt[hashIndex].simNum > 0 && tt[hashIndex].key != queryKey) { // Modified
+#ifdef LOG_COLLISION
+				hitNum++; // Modifed 
+				clsNum++; // Modified
+#endif
 			}
-			else { // Modified
-				if (tt[hashIndex].simNum > 0 && tt[hashIndex].key != queryKey) { // Modified
-#ifdef LOG_COLLISION
-					hitNum++; // Modifed 
-					clsNum++; // Modified
-#endif
+
+			// Simulation
+			std::atomic<int> nodeScores = 0, nodeSimTimes = 0;
+			pool.parallelize_loop(0, SIMULATION_NUM, [this, &currentBoard, &throwList, &i, &nodeScores, &nodeSimTimes, &queryKey](const int& q, const int& w) {
+				for (int a = q; a < w; ++a) {
+					nodeScores += Simulate(currentBoard, throwList[i]);
+					nodeSimTimes++;
 				}
+				});
 
-				// Simulation
-				std::atomic<int> nodeScores = 0, nodeSimTimes = 0;
-				pool.parallelize_loop(0, SIMULATION_NUM, [this, &currentBoard, &throwList, &i, &nodeScores, &nodeSimTimes, &queryKey](const int& q, const int& w) {
-					for (int a = q; a < w; ++a) {
-						nodeScores += Simulate(currentBoard, throwList[i]);
-						nodeSimTimes++;
-					}
-					});
+			// Upadate first-depth node
+			nodes[i + 1].totalSimTimes += nodeSimTimes;
+			nodes[i + 1].averageScore = (double)nodeScores / nodeSimTimes;
 
-				// Upadate first-depth node
-				nodes[i + 1].totalSimTimes += nodeSimTimes;
-				nodes[i + 1].averageScore = (double)nodeScores / nodeSimTimes;
+			treeSimTimes += nodeSimTimes;
 
-				treeSimTimes += nodeSimTimes;
-
-				// Update tt
-				unsigned long long hashIndex = (unsigned long long)(queryKey & mask); // Modified
-				if (tt[hashIndex].simNum == 0) {
-					tt[hashIndex].key = queryKey; // Modified
-					tt[hashIndex].simNum = nodeSimTimes; // Modified
-					tt[hashIndex].simScore = nodeScores; // Modified
-				}
-				else if (tt[hashIndex].key == queryKey) {
-					tt[hashIndex].simNum += nodeSimTimes; // Modified
-					tt[hashIndex].simScore += nodeScores; // Modified
-				}
+			// Update tt
+			unsigned long long hashIndex = (unsigned long long)(queryKey & mask); // Modified
+			if (tt[hashIndex].simNum == 0) {
+				tt[hashIndex].key = queryKey; // Modified
+				tt[hashIndex].simNum = nodeSimTimes; // Modified
+				tt[hashIndex].simScore = nodeScores; // Modified
+			}
+			else if (tt[hashIndex].key == queryKey) {
+				tt[hashIndex].simNum += nodeSimTimes; // Modified
+				tt[hashIndex].simScore += nodeScores; // Modified
 			}
 		}
-		// Generalize the other layers
-		int nodesSize = throwListSize + 1; // Current number of elements of nodes[]
-		short int selectionCnt = 1; // Count the number of repeated selections
+	}
+	// Generalize the other layers
+	int nodesSize = throwListSize + 1; // Current number of elements of nodes[]
+	short int selectionCnt = 1; // Count the number of repeated selections
 
-		boost::multiprecision::uint256_t maxLeafKey, drawLayerKey; // Modified
-		while (selectionCnt++ < SELECTION_NUM) {
-			// Selection: Select the path based on UCB
-			int ptr = 0; // Index of root (Selection starts from root)
+	boost::multiprecision::uint256_t maxLeafKey, drawLayerKey; // Modified
+	while (selectionCnt++ < SELECTION_NUM) {
+		// Selection: Select the path based on UCB
+		int ptr = 0; // Index of root (Selection starts from root)
 
-			Board maxLeaf = currentBoard;
-			maxLeaf.status = currentBoard.myPosition;
-			maxLeafKey = hashKey; // Modified
-			int maxLeafIndex = -1;
-			while (nodes[ptr].childrenNum > 0) { // Trace to leaf node
-				double maxUCB = -1;
-				for (int i = 0; i < nodes[ptr].childrenNum; i++) {
-					double nodeUCB = UCB(nodes[ptr].childIndex[i], treeSimTimes);
-					if (nodeUCB > maxUCB) {
-						maxUCB = nodeUCB;
-						maxLeafIndex = nodes[ptr].childIndex[i];
-					}
+		Board maxLeaf = currentBoard;
+		maxLeaf.status = currentBoard.myPosition;
+		maxLeafKey = hashKey; // Modified
+		int maxLeafIndex = -1;
+		while (nodes[ptr].childrenNum > 0) { // Trace to leaf node
+			double maxUCB = -1;
+			for (int i = 0; i < nodes[ptr].childrenNum; i++) {
+				double nodeUCB = UCB(nodes[ptr].childIndex[i], treeSimTimes);
+				if (nodeUCB > maxUCB) {
+					maxUCB = nodeUCB;
+					maxLeafIndex = nodes[ptr].childIndex[i];
 				}
-				if (nodes[maxLeafIndex].drawnTile != -1) { // Depth > 1
-					maxLeaf.predictRemainTiles.TakeSpecificTile(nodes[maxLeafIndex].drawnTile);
-					specificTileNum = maxLeaf.privateHand.getTileNum(nodes[maxLeafIndex].drawnTile); // Modified
-					if (specificTileNum > 0) maxLeafKey ^= tileNumHash[(nodes[maxLeafIndex].drawnTile << 2) + specificTileNum - 1]; // Modified
-					maxLeaf.privateHand.AddHand(nodes[maxLeafIndex].drawnTile); // Modified
-					maxLeafKey ^= tileNumHash[(nodes[maxLeafIndex].drawnTile << 2) + specificTileNum]; // Modified
-					table->UpdateTableID(maxLeaf.tableID, nodes[maxLeafIndex].drawnTile, TAKE);
-				}
-				if (nodes[maxLeafIndex].throwTile != -1) { // !Leaf node
-					specificTileNum = maxLeaf.privateHand.getTileNum(nodes[maxLeafIndex].throwTile); // Modified
-					maxLeafKey ^= tileNumHash[(nodes[maxLeafIndex].throwTile << 2) + specificTileNum - 1]; // Modified
-					MakeThrow(maxLeaf, nodes[maxLeafIndex].throwTile, false);
-					if (specificTileNum > 1) maxLeafKey ^= tileNumHash[(nodes[maxLeafIndex].throwTile << 2) + specificTileNum - 2]; // Modified
-				}
-				ptr = maxLeafIndex;
-				maxLeaf.status = currentBoard.myPosition;
 			}
+			if (nodes[maxLeafIndex].drawnTile != -1) { // Depth > 1
+				maxLeaf.predictRemainTiles.TakeSpecificTile(nodes[maxLeafIndex].drawnTile);
+				specificTileNum = maxLeaf.privateHand.getTileNum(nodes[maxLeafIndex].drawnTile); // Modified
+				if (specificTileNum > 0) maxLeafKey ^= tileNumHash[(nodes[maxLeafIndex].drawnTile << 2) + specificTileNum - 1]; // Modified
+				maxLeaf.privateHand.AddHand(nodes[maxLeafIndex].drawnTile); // Modified
+				maxLeafKey ^= tileNumHash[(nodes[maxLeafIndex].drawnTile << 2) + specificTileNum]; // Modified
+				table->UpdateTableID(maxLeaf.tableID, nodes[maxLeafIndex].drawnTile, TAKE);
+			}
+			if (nodes[maxLeafIndex].throwTile != -1) { // !Leaf node
+				specificTileNum = maxLeaf.privateHand.getTileNum(nodes[maxLeafIndex].throwTile); // Modified
+				maxLeafKey ^= tileNumHash[(nodes[maxLeafIndex].throwTile << 2) + specificTileNum - 1]; // Modified
+				MakeThrow(maxLeaf, nodes[maxLeafIndex].throwTile, false);
+				if (specificTileNum > 1) maxLeafKey ^= tileNumHash[(nodes[maxLeafIndex].throwTile << 2) + specificTileNum - 2]; // Modified
+			}
+			ptr = maxLeafIndex;
+			maxLeaf.status = currentBoard.myPosition;
+		}
 
-			// Check if maxLeaf is terminate node or not
-			if (nodes[maxLeafIndex].isTerminateNode == true) {
-				nodes[maxLeafIndex].totalSimTimes += SIMULATION_NUM;
-				backwardPropagation(nodes[maxLeafIndex].parentIndex, 3, SIMULATION_NUM);
+		// Check if maxLeaf is terminate node or not
+		if (nodes[maxLeafIndex].isTerminateNode == true) {
+			nodes[maxLeafIndex].totalSimTimes += SIMULATION_NUM;
+			backwardPropagation(nodes[maxLeafIndex].parentIndex, 3, SIMULATION_NUM);
+			continue;
+		}
+
+		// Expansion
+		int drawClasses[34] = { 0 }, drawNum = maxLeaf.predictRemainTiles.getRemainTilesClasses(drawClasses);
+		double expectedScore = 0;
+		int maxLeafSimTimes = 0;
+
+
+		for (int drawIndex = 0; drawIndex < drawNum; drawIndex++) {
+			Board drawLayerChld = maxLeaf;
+			drawLayerChld.status = maxLeaf.myPosition;
+			drawLayerKey = maxLeafKey; // Modified
+
+			// Calculate the probability of drawing the card
+			double drawProbability = (double)drawLayerChld.predictRemainTiles.getRemainTilesNum(drawClasses[drawIndex]) / drawLayerChld.predictRemainTiles.getRemainTotalTilesNum();
+
+			// Take the tile and update drawLayerChld info
+			drawLayerChld.predictRemainTiles.TakeSpecificTile(drawClasses[drawIndex]);
+			specificTileNum = drawLayerChld.privateHand.getTileNum(drawClasses[drawIndex]); // Modified
+			if (specificTileNum > 0) drawLayerKey ^= tileNumHash[(drawClasses[drawIndex] << 2) + specificTileNum - 1]; // Modified
+			drawLayerChld.privateHand.AddHand(drawClasses[drawIndex]); // Modified
+			drawLayerKey ^= tileNumHash[(drawClasses[drawIndex] << 2) + specificTileNum]; // Modified
+			table->UpdateTableID(drawLayerChld.tableID, drawClasses[drawIndex], TAKE);
+			drawLayerChld.listenNum = table->getTilesListenNum(5 - drawLayerChld.publicGroupNum, drawLayerChld.tableID, drawLayerChld.is_have_eyes);
+
+			// Check if self drawinf or not
+			if (drawLayerChld.listenNum == -1) {
+				// Expand a terminal node
+				nodes[maxLeafIndex].childIndex[(nodes[maxLeafIndex].childrenNum++)] = nodesSize;
+				if (nodes[maxLeafIndex].childrenNum >= 578) throw std::invalid_argument("In MCTS: childIndex out of range - 1\n");
+				nodes[nodesSize].averageScore = 3;
+				nodes[nodesSize].childrenNum = 0;
+				nodes[nodesSize].depth = nodes[maxLeafIndex].depth + 1;
+				nodes[nodesSize].drawnTile = drawClasses[drawIndex];
+				nodes[nodesSize].isTerminateNode = true;
+				nodes[nodesSize].parentIndex = maxLeafIndex;
+				nodes[nodesSize].throwTile = -1;
+				nodes[nodesSize].totalSimTimes = SIMULATION_NUM;
+
+				// Backward propagation
+				backwardPropagation(maxLeafIndex, 3, SIMULATION_NUM);
+
+				nodesSize++;
 				continue;
 			}
 
-			// Expansion
-			int drawClasses[34] = { 0 }, drawNum = maxLeaf.predictRemainTiles.getRemainTilesClasses(drawClasses);
-			double expectedScore = 0;
-			int maxLeafSimTimes = 0;
+			// Calculate maxLeaf's throwList
+			int drawLayerThrowList[17] = { 0 }, maxLeafThrowSize = ThrowList(drawLayerChld, drawLayerThrowList);
 
+			// Check if maxLeaf's throw is empty or not
+			if (maxLeafThrowSize == 0) throw std::invalid_argument("In MCTS: ThrowList of maxLeaf is empty.\n");
 
-			for (int drawIndex = 0; drawIndex < drawNum; drawIndex++) {
-				Board drawLayerChld = maxLeaf;
-				drawLayerChld.status = maxLeaf.myPosition;
-				drawLayerKey = maxLeafKey; // Modified
+			int expandedChldrenScores = 0, expandedChldrenSimtimes = 0; // Record total scores and total simTimes
+			for (int i = 0; i < maxLeafThrowSize; i++) {
+				if (nodes[maxLeafIndex].childrenNum >= 578) throw std::invalid_argument("In MCTS: childIndex out of range - 2\n");
+				nodes[nodesSize].averageScore = 0;
+				nodes[nodesSize].childrenNum = 0;
+				nodes[nodesSize].depth = nodes[maxLeafIndex].depth + 1;
+				nodes[nodesSize].drawnTile = drawClasses[drawIndex];
+				nodes[nodesSize].isTerminateNode = false;
+				nodes[nodesSize].parentIndex = maxLeafIndex;
+				nodes[nodesSize].throwTile = drawLayerThrowList[i];
+				nodes[nodesSize].totalSimTimes = 0;
 
-				// Calculate the probability of drawing the card
-				double drawProbability = (double)drawLayerChld.predictRemainTiles.getRemainTilesNum(drawClasses[drawIndex]) / drawLayerChld.predictRemainTiles.getRemainTotalTilesNum();
+				// Check tt
+				specificTileNum = drawLayerChld.privateHand.getTileNum(drawLayerThrowList[i]); // Modified
+				queryKey = drawLayerKey ^ tileNumHash[(drawLayerThrowList[i] << 2) + specificTileNum - 1]; // Modified
+				if (specificTileNum > 1) queryKey ^= tileNumHash[(drawLayerThrowList[i] << 2) + specificTileNum - 2]; // Modified
+				nodes[maxLeafIndex].childIndex[(nodes[maxLeafIndex].childrenNum++)] = nodesSize;
+				hashIndex = (unsigned int)(queryKey & mask); // Modified
+				if (tt[hashIndex].simNum >= SIMULATION_NUM && tt[hashIndex].key == queryKey) { // Hit // Modified
+#ifdef LOG_COLLISION
+					hitNum++; // Modified
+#endif
+					nodes[nodesSize].totalSimTimes += tt[hashIndex].simNum; // Modified
+					nodes[nodesSize].averageScore = (double)tt[hashIndex].simScore / tt[hashIndex].simNum; // Modified
 
-				// Take the tile and update drawLayerChld info
-				drawLayerChld.predictRemainTiles.TakeSpecificTile(drawClasses[drawIndex]);
-				specificTileNum = drawLayerChld.privateHand.getTileNum(drawClasses[drawIndex]); // Modified
-				if (specificTileNum > 0) drawLayerKey ^= tileNumHash[(drawClasses[drawIndex] << 2) + specificTileNum - 1]; // Modified
-				drawLayerChld.privateHand.AddHand(drawClasses[drawIndex]); // Modified
-				drawLayerKey ^= tileNumHash[(drawClasses[drawIndex] << 2) + specificTileNum]; // Modified
-				table->UpdateTableID(drawLayerChld.tableID, drawClasses[drawIndex], TAKE);
-				drawLayerChld.listenNum = table->getTilesListenNum(5 - drawLayerChld.publicGroupNum, drawLayerChld.tableID, drawLayerChld.is_have_eyes);
+					expandedChldrenScores += tt[hashIndex].simScore; // Modified
+					expandedChldrenSimtimes += tt[hashIndex].simNum; // Modified
 
-				// Check if self drawinf or not
-				if (drawLayerChld.listenNum == -1) {
-					// Expand a terminal node
-					nodes[maxLeafIndex].childIndex[(nodes[maxLeafIndex].childrenNum++)] = nodesSize;
-					if (nodes[maxLeafIndex].childrenNum >= 578) throw std::invalid_argument("In MCTS: childIndex out of range - 1\n");
-					nodes[nodesSize].averageScore = 3;
-					nodes[nodesSize].childrenNum = 0;
-					nodes[nodesSize].depth = nodes[maxLeafIndex].depth + 1;
-					nodes[nodesSize].drawnTile = drawClasses[drawIndex];
-					nodes[nodesSize].isTerminateNode = true;
-					nodes[nodesSize].parentIndex = maxLeafIndex;
-					nodes[nodesSize].throwTile = -1;
-					nodes[nodesSize].totalSimTimes = SIMULATION_NUM;
-
-					// Backward propagation
-					backwardPropagation(maxLeafIndex, 3, SIMULATION_NUM);
-
-					nodesSize++;
-					continue;
+					treeSimTimes += tt[hashIndex].simNum; // Modified
 				}
-
-				// Calculate maxLeaf's throwList
-				int drawLayerThrowList[17] = { 0 }, maxLeafThrowSize = ThrowList(drawLayerChld, drawLayerThrowList);
-
-				// Check if maxLeaf's throw is empty or not
-				if (maxLeafThrowSize == 0) throw std::invalid_argument("In MCTS: ThrowList of maxLeaf is empty.\n");
-
-				int expandedChldrenScores = 0, expandedChldrenSimtimes = 0; // Record total scores and total simTimes
-				for (int i = 0; i < maxLeafThrowSize; i++) {
-					if (nodes[maxLeafIndex].childrenNum >= 578) throw std::invalid_argument("In MCTS: childIndex out of range - 2\n");
-					nodes[nodesSize].averageScore = 0;
-					nodes[nodesSize].childrenNum = 0;
-					nodes[nodesSize].depth = nodes[maxLeafIndex].depth + 1;
-					nodes[nodesSize].drawnTile = drawClasses[drawIndex];
-					nodes[nodesSize].isTerminateNode = false;
-					nodes[nodesSize].parentIndex = maxLeafIndex;
-					nodes[nodesSize].throwTile = drawLayerThrowList[i];
-					nodes[nodesSize].totalSimTimes = 0;
-
-					// Check tt
-					specificTileNum = drawLayerChld.privateHand.getTileNum(drawLayerThrowList[i]); // Modified
-					queryKey = drawLayerKey ^ tileNumHash[(drawLayerThrowList[i] << 2) + specificTileNum - 1]; // Modified
-					if (specificTileNum > 1) queryKey ^= tileNumHash[(drawLayerThrowList[i] << 2) + specificTileNum - 2]; // Modified
-					nodes[maxLeafIndex].childIndex[(nodes[maxLeafIndex].childrenNum++)] = nodesSize;
-					hashIndex = (unsigned int)(queryKey & mask); // Modified
-					if (tt[hashIndex].simNum >= SIMULATION_NUM && tt[hashIndex].key == queryKey) { // Hit // Modified
+				else {
+					if (tt[hashIndex].simNum > 0 && tt[hashIndex].key != queryKey) { // Collision // Modified
 #ifdef LOG_COLLISION
 						hitNum++; // Modified
+						clsNum++; //Modified
 #endif
-						nodes[nodesSize].totalSimTimes += tt[hashIndex].simNum; // Modified
-						nodes[nodesSize].averageScore = (double)tt[hashIndex].simScore / tt[hashIndex].simNum; // Modified
-
-						expandedChldrenScores += tt[hashIndex].simScore; // Modified
-						expandedChldrenSimtimes += tt[hashIndex].simNum; // Modified
-
-						treeSimTimes += tt[hashIndex].simNum; // Modified
 					}
-					else {
-						if (tt[hashIndex].simNum > 0 && tt[hashIndex].key != queryKey) { // Collision // Modified
-#ifdef LOG_COLLISION
-							hitNum++; // Modified
-							clsNum++; //Modified
-#endif
-						}
 
-						std::atomic<int> nodeScores = 9, nodeSimTimes = 0;
-						pool.parallelize_loop(0, SIMULATION_NUM, [this, &drawLayerChld, &drawLayerThrowList, &i, &nodesSize, &nodeScores, &nodeSimTimes](const int& q, const int& w) {
-							int oppThrowNum = 3 * (nodes[nodesSize].depth - 1);
+					std::atomic<int> nodeScores = 9, nodeSimTimes = 0;
+					pool.parallelize_loop(0, SIMULATION_NUM, [this, &drawLayerChld, &drawLayerThrowList, &i, &nodesSize, &nodeScores, &nodeSimTimes](const int& q, const int& w) {
+						int oppThrowNum = 3 * (nodes[nodesSize].depth - 1);
 						if (drawLayerChld.predictRemainTiles.getRemainTotalTilesNum() - oppThrowNum <= 64 - oppGroup) { // Draw
 							nodeSimTimes += (w - q);
 							return;
@@ -2885,44 +2885,44 @@ inline void AI::MCTS(const Board& currentBoard, const int* throwList, const int&
 							nodeScores += Simulate(expandedChild, drawLayerThrowList[i]);
 							nodeSimTimes++;
 						}
-							});
+						});
 
-						treeSimTimes += nodeSimTimes; // Modified
+					treeSimTimes += nodeSimTimes; // Modified
 
-						// Update tt
-						if (tt[hashIndex].simNum == 0) {
-							tt[hashIndex].key = queryKey; // Modified
-							tt[hashIndex].simNum = nodeSimTimes; // Modified
-							tt[hashIndex].simScore = nodeScores; // Modified
-						}
-						else if (tt[hashIndex].key == queryKey) {
-							tt[hashIndex].simNum += nodeSimTimes; // Modified
-							tt[hashIndex].simScore += nodeScores; // Modified
-						}
-
-
-						nodes[nodesSize].totalSimTimes += nodeSimTimes;
-						nodes[nodesSize].averageScore = (double)nodeScores / nodeSimTimes;
-
-						expandedChldrenScores += nodeScores;
-						expandedChldrenSimtimes += nodeSimTimes;
+					// Update tt
+					if (tt[hashIndex].simNum == 0) {
+						tt[hashIndex].key = queryKey; // Modified
+						tt[hashIndex].simNum = nodeSimTimes; // Modified
+						tt[hashIndex].simScore = nodeScores; // Modified
+					}
+					else if (tt[hashIndex].key == queryKey) {
+						tt[hashIndex].simNum += nodeSimTimes; // Modified
+						tt[hashIndex].simScore += nodeScores; // Modified
 					}
 
-					nodesSize++;
-					if (nodesSize >= SHRT_MAX) throw std::invalid_argument("In MCTS: Size of nodes[] is too small.\n");
+
+					nodes[nodesSize].totalSimTimes += nodeSimTimes;
+					nodes[nodesSize].averageScore = (double)nodeScores / nodeSimTimes;
+
+					expandedChldrenScores += nodeScores;
+					expandedChldrenSimtimes += nodeSimTimes;
 				}
-				maxLeafSimTimes += expandedChldrenSimtimes;
-				expectedScore += drawProbability * (double)expandedChldrenScores / expandedChldrenSimtimes;
+
+				nodesSize++;
+				if (nodesSize >= SHRT_MAX) throw std::invalid_argument("In MCTS: Size of nodes[] is too small.\n");
 			}
-			backwardPropagation(maxLeafIndex, expectedScore, maxLeafSimTimes);
+			maxLeafSimTimes += expandedChldrenSimtimes;
+			expectedScore += drawProbability * (double)expandedChldrenScores / expandedChldrenSimtimes;
 		}
-		for (int i = 0; i < throwListSize; i++) nodes[1 + i].throwTile = thrownTileToIndex[nodes[1 + i].throwTile];
-		treeSize = nodesSize;
+		backwardPropagation(maxLeafIndex, expectedScore, maxLeafSimTimes);
+	}
+	for (int i = 0; i < throwListSize; i++) nodes[1 + i].throwTile = thrownTileToIndex[nodes[1 + i].throwTile];
+	treeSize = nodesSize;
 
 #ifdef LOG_COLLISION
-		std::ofstream clsLog("clsLog.csv", std::ios::app); // Modified
-		clsLog << clsNum << "," << hitNum << "\n"; // Modified
-		clsLog.close(); // Modified
+	std::ofstream clsLog("clsLog.csv", std::ios::app); // Modified
+	clsLog << clsNum << "," << hitNum << "\n"; // Modified
+	clsLog.close(); // Modified
 #endif
 	//}
 }
