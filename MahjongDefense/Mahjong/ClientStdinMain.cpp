@@ -161,7 +161,6 @@ int main() {
 			}
 			else if (command == 5 && data[0] == controller.getID()) { // 5 : hu
 				winCount++;
-				free(tt);
 				//recordWin("GameResult.csv", gameCount, winCount);
 			}
 

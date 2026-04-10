@@ -57,6 +57,9 @@
     <ClCompile Include="DefenseAnalyze.cpp">
       <Filter>來源檔案</Filter>
     </ClCompile>
+    <ClCompile Include="TT.cpp">
+      <Filter>來源檔案</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Table.h">

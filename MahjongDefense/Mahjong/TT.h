@@ -1,8 +1,12 @@
+#pragma once
+
 #ifndef TT
+
 #include <boost/multiprecision/cpp_int.hpp>
 
 #define TT
 #define TT_SIZE 33554432 // 2^25 // Modified
+
 // Entry of TT
 typedef struct TT_ENTRY { // Modified
 	boost::multiprecision::uint256_t key;

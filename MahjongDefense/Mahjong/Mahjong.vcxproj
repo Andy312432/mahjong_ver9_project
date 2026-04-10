@@ -197,6 +197,7 @@
       </TranslateIncludes>
       <SupportJustMyCode Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</SupportJustMyCode>
     </ClCompile>
+    <ClCompile Include="TT.cpp" />
     <ClCompile Include="PrivateHand.cpp">
       <FunctionLevelLinking Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</FunctionLevelLinking>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">false</ExcludedFromBuild>
