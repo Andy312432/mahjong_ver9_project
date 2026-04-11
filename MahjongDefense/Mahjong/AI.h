@@ -63,8 +63,8 @@ private:
 	void MakeTake(Board& b, const int& player, const int& action);
 	inline void UpdateStatus(Board& b);
 	void MakeThrow(Board& b, const int& card, const bool& real);
-	int Partition(int* arr, int front, int end);
-	void QuickSort(int* arr, int front, int end);
+	//int Partition(int* arr, int front, int end);
+	//void QuickSort(int* arr, int front, int end);
 	void ShowGameInformation(const vector<int>& cards);
 protected:
 	vector<int> dealEat();

@@ -55,31 +55,165 @@ struct NODE {
 	short int childIndex[578];
 } nodes[SHRT_MAX];
 
+//-----------------------------  Tools  -----------------------------------
 namespace {
-/// 專案外部的牌 ID 例如 110 / 120 / 330，AI 內部會統一轉成 0~33 的牌種索引。
-inline int CardIdToTileIndex(const int cardId) {
-	return (cardId / 100 - 1) * 9 + (cardId / 10 % 10 - 1);
-}
+	int Partition(int* childOrder, int left, int right) {
+		const double pivotScore = nodes[nodes[0].childIndex[childOrder[right]]].averageScore;
+		int partitionIndex = left - 1;
+		for (int currentIndex = left; currentIndex < right; ++currentIndex) {
+			if (nodes[nodes[0].childIndex[childOrder[currentIndex]]].averageScore > pivotScore) {
+				++partitionIndex;
+				std::swap(childOrder[partitionIndex], childOrder[currentIndex]);
+			}
+		}
+		++partitionIndex;
+		std::swap(childOrder[partitionIndex], childOrder[right]);
+		return partitionIndex;
+	}
 
-/// 把 AI 內部的 0~33 牌種索引轉回對應花色的牌 ID 基底，例如 0 -> 110。
-inline int TileIndexToCardBaseId(const int tileIndex) {
-	return ((tileIndex / 9) + 1) * 100 + ((tileIndex % 9) + 1) * 10;
-}
-
-/// 同一種牌在手上可能有 4 張實體牌，這裡負責找出目前真的持有的那一張 cardId。
-inline int FindCardIdInHand(PrivateHand& hand, const int tileIndex) {
-	const int cardBaseId = TileIndexToCardBaseId(tileIndex);
-	for (int offset = 0; offset < 4; ++offset) {
-		const int cardId = cardBaseId + offset;
-		if (hand.findCard(cardId)) {
-			return cardId;
+	void QuickSort(int* childOrder, int left, int right) {
+		if (left < right) {
+			const int pivotIndex = Partition(childOrder, left, right);
+			QuickSort(childOrder, left, pivotIndex - 1);
+			QuickSort(childOrder, pivotIndex + 1, right);
 		}
 	}
-	return -1;
-}
+
+	/// 專案外部的牌 ID 例如 110 / 120 / 330，AI 內部會統一轉成 0~33 的牌種索引。
+	inline int CardIdToTileIndex(const int cardId) {
+		return (cardId / 100 - 1) * 9 + (cardId / 10 % 10 - 1);
+	}
+
+	/// 把 AI 內部的 0~33 牌種索引轉回對應花色的牌 ID 基底，例如 0 -> 110。
+	inline int TileIndexToCardBaseId(const int tileIndex) {
+		return ((tileIndex / 9) + 1) * 100 + ((tileIndex % 9) + 1) * 10;
+	}
+
+	/// 同一種牌在手上可能有 4 張實體牌，負責找出目前真的持有的那一張 cardId。
+	inline int FindCardIdInHand(PrivateHand& hand, const int tileIndex) {
+		const int cardBaseId = TileIndexToCardBaseId(tileIndex);
+		for (int offset = 0; offset < 4; ++offset) {
+			const int cardId = cardBaseId + offset;
+			if (hand.findCard(cardId)) {
+				return cardId;
+			}
+		}
+		return -1;
+	}
+
+	//將 暫時改table又還原這件事給包起來，比較好看程式碼
+	class TableIdActionGuard {
+		Table* table;
+		int* tableID;
+		int tile;
+		int rollbackAction;
+	public:
+		inline TableIdActionGuard(Table* table, int* tableID, int tile, int applyAction, int rollbackAction): 
+			table(table), tableID(tableID), tile(tile), rollbackAction(rollbackAction) {
+			table->UpdateTableID(tableID, tile, applyAction);
+		}
+		inline ~TableIdActionGuard() { table->UpdateTableID(tableID, tile, rollbackAction); };
+		TableIdActionGuard(const TableIdActionGuard&) = delete;
+		TableIdActionGuard& operator=(const TableIdActionGuard&) = delete;
+	};
+
+	//同上，但兩個的版本
+	class TableIdPairActionGuard {
+		Table* table;
+		int* tableID;
+		int firstTile;
+		int secondTile;
+		int rollbackAction;
+	public:
+		inline TableIdPairActionGuard(Table* table, int* tableID, int firstTile, int secondTile, int applyAction, int rollbackAction) :
+			table(table), tableID(tableID), firstTile(firstTile), secondTile(secondTile), rollbackAction(rollbackAction) {
+			table->UpdateTableID(tableID, firstTile, applyAction);
+			table->UpdateTableID(tableID, secondTile, applyAction);
+		}
+		inline ~TableIdPairActionGuard() {
+			table->UpdateTableID(tableID, secondTile, rollbackAction);
+			table->UpdateTableID(tableID, firstTile, rollbackAction);
+		}
+		TableIdPairActionGuard(const TableIdPairActionGuard&) = delete;
+		TableIdPairActionGuard& operator=(const TableIdPairActionGuard&) = delete;
+	};
+
+	inline bool IsTryEatLeftPattern(const int* handTileTypes, const int handTileTypeCount, const int tileTypeIndex, const int seaCard) {
+		return tileTypeIndex + 1 < handTileTypeCount
+			&& handTileTypes[tileTypeIndex] == seaCard + 1
+			&& handTileTypes[tileTypeIndex + 1] == seaCard + 2
+			&& seaCard / 9 == handTileTypes[tileTypeIndex] / 9
+			&& seaCard / 9 == handTileTypes[tileTypeIndex + 1] / 9;
+	}
+
+	inline bool IsTryEatMiddleAdjacentPattern(const int* handTileTypes, const int handTileTypeCount, const int tileTypeIndex, const int seaCard) {
+		return tileTypeIndex + 1 < handTileTypeCount
+			&& handTileTypes[tileTypeIndex] == seaCard - 1
+			&& handTileTypes[tileTypeIndex + 1] == seaCard + 1
+			&& seaCard / 9 == handTileTypes[tileTypeIndex] / 9
+			&& seaCard / 9 == handTileTypes[tileTypeIndex + 1] / 9;
+	}
+
+	inline bool IsTryEatMiddleGapPattern(const int* handTileTypes, const int handTileTypeCount, const int tileTypeIndex, const int seaCard) {
+		return tileTypeIndex + 2 < handTileTypeCount
+			&& handTileTypes[tileTypeIndex] == seaCard - 1
+			&& handTileTypes[tileTypeIndex + 2] == seaCard + 1
+			&& seaCard / 9 == handTileTypes[tileTypeIndex] / 9
+			&& seaCard / 9 == handTileTypes[tileTypeIndex + 2] / 9;
+	}
+
+	inline bool IsTryEatRightPattern(const int* handTileTypes, const int handTileTypeCount, const int tileTypeIndex, const int seaCard) {
+		return tileTypeIndex + 1 < handTileTypeCount
+			&& handTileTypes[tileTypeIndex] == seaCard - 2
+			&& handTileTypes[tileTypeIndex + 1] == seaCard - 1
+			&& seaCard / 9 == handTileTypes[tileTypeIndex] / 9
+			&& seaCard / 9 == handTileTypes[tileTypeIndex + 1] / 9;
+	}
+
+	inline TableIdPairActionGuard MakeTryPongGuard(Table* table, int* tableID, int tile) {
+		return TableIdPairActionGuard(table, tableID, tile, tile, THROW, TAKE);
+	}
+
+	inline TableIdPairActionGuard MakeTryEatLeftGuard(Table* table, int* tableID, int firstTile, int secondTile) {
+		return TableIdPairActionGuard(table, tableID, firstTile, secondTile, THROW, TAKE);
+	}
+
+	inline TableIdPairActionGuard MakeTryEatMiddleGuard(Table* table, int* tableID, int firstTile, int secondTile) {
+		return TableIdPairActionGuard(table, tableID, firstTile, secondTile, THROW, TAKE);
+	}
+
+	inline TableIdPairActionGuard MakeTryEatRightGuard(Table* table, int* tableID, int firstTile, int secondTile) {
+		return TableIdPairActionGuard(table, tableID, firstTile, secondTile, THROW, TAKE);
+	}
+
+	inline int QueryListenNumAfterTryThrow(Table* table, int* tableID, int tile, int needGroup, bool& isEyes) {
+		TableIdActionGuard tempThrowGuard(table, tableID, tile, THROW, TAKE);
+		return table->getTilesListenNum(needGroup, tableID, isEyes);
+	};
+	inline int QueryListenNumAfterTryTake(Table* table, int* tableID, int tile, int needGroup, bool& isEyes) {
+		TableIdActionGuard tempTakeGuard(table, tableID, tile, TAKE, THROW);
+		return table->getTilesListenNum(needGroup, tableID, isEyes);
+	};
+	inline int QueryListenNumAfterTryPong(Table* table, int* tableID, int tile, int needGroup, bool& isEyes) {
+		TableIdPairActionGuard tempPongGuard = MakeTryPongGuard(table, tableID, tile);
+		return table->getTilesListenNum(needGroup, tableID, isEyes);
+	};
+	inline int QueryListenNumAfterTryEatLeft(Table* table, int* tableID, int firstTile, int secondTile, int needGroup, bool& isEyes) {
+		TableIdPairActionGuard tempEatLeftGuard = MakeTryEatLeftGuard(table, tableID, firstTile, secondTile);
+		return table->getTilesListenNum(needGroup, tableID, isEyes);
+	};
+	inline int QueryListenNumAfterTryEatMiddle(Table* table, int* tableID, int firstTile, int secondTile, int needGroup, bool& isEyes) {
+		TableIdPairActionGuard tempEatMiddleGuard = MakeTryEatMiddleGuard(table, tableID, firstTile, secondTile);
+		return table->getTilesListenNum(needGroup, tableID, isEyes);
+	};
+	inline int QueryListenNumAfterTryEatRight(Table* table, int* tableID, int firstTile, int secondTile, int needGroup, bool& isEyes) {
+		TableIdPairActionGuard tempEatRightGuard = MakeTryEatRightGuard(table, tableID, firstTile, secondTile);
+		return table->getTilesListenNum(needGroup, tableID, isEyes);
+	};
 
 constexpr int kTileTypeCount = 34;
 }
+//--End of tools--
 
 AI::AI(const int& playerId, const vector<int>& cards, Table* table) : Player(playerId, cards) {
 	this->mode = 0;
@@ -115,10 +249,11 @@ constexpr bool AI::isCanEat(int* tileArray, int* tileNumArray, const int& length
 	}
 	for (int i = 0; i < length; ++i) {
 		/// 可以吃的狀況
-		if (tileArray[i] / 9 != 3 && ((i + 1 < length && tileArray[i] == seaCard + 1 && tileArray[i + 1] == seaCard + 2 && seaCard / 9 == tileArray[i + 1] / 9) ||
-			(i - 1 >= 0 && tileArray[i] == seaCard + 1 && tileArray[i - 1] == seaCard - 1 && seaCard / 9 == tileArray[i] / 9 && seaCard / 9 == tileArray[i - 2] / 9) ||
-			(i - 2 >= 0 && tileArray[i] == seaCard + 1 && tileArray[i - 2] == seaCard - 1 && seaCard / 9 == tileArray[i] / 9 && seaCard / 9 == tileArray[i - 2] / 9) ||
-			(i + 1 < length && tileArray[i] == seaCard - 2 && tileArray[i + 1] == seaCard - 1 && seaCard / 9 == tileArray[i] / 9))) {
+		if (tileArray[i] / 9 != 3 &&
+			(IsTryEatLeftPattern(tileArray, length, i, seaCard)
+				|| (i - 1 >= 0 && tileArray[i] == seaCard + 1 && tileArray[i - 1] == seaCard - 1 && seaCard / 9 == tileArray[i] / 9 && seaCard / 9 == tileArray[i - 2] / 9)
+				|| (i - 2 >= 0 && tileArray[i] == seaCard + 1 && tileArray[i - 2] == seaCard - 1 && seaCard / 9 == tileArray[i] / 9 && seaCard / 9 == tileArray[i - 2] / 9)
+				|| IsTryEatRightPattern(tileArray, length, i, seaCard))) {
 			return true;
 		}
 	}
@@ -232,11 +367,9 @@ inline int AI::ThrowList(Board& b, int* throwArray) {
 		const int distinctTileCount = b.privateHand.getTileNumArray(handTileTypes, handTileCounts);
 		bool isEyes = false;
 		for (int tileTypeIndex = 0; tileTypeIndex < distinctTileCount; ++tileTypeIndex) {
-			table->UpdateTableID(b.tableID, handTileTypes[tileTypeIndex], THROW); /// 試捨
-			if (table->getTilesListenNum(5 - b.publicGroupNum, b.tableID, isEyes) == b.listenNum) {
+			if (QueryListenNumAfterTryThrow(table, b.tableID, handTileTypes[tileTypeIndex], 5 - b.publicGroupNum, isEyes) == b.listenNum) {
 				throwArray[candidateCount++] = handTileTypes[tileTypeIndex]; /// 找出捨牌後不會增加進聽數的牌
 			}
-			table->UpdateTableID(b.tableID, handTileTypes[tileTypeIndex], TAKE); /// 回復試捨操作
 		}
 		return candidateCount;
 	}
@@ -271,12 +404,11 @@ inline int AI::ThrowList(Board& b, int* throwArray) {
 	Board a(b);
 	vector<int> throwArray;
 	for (int i = 0; i < length; i++) {
-		table->UpdateTableID(b.tableID, tempArray[i], THROW);
+		TableIdActionGuard tempThrowGuard(table, b.tableID, tempArray[i], THROW, TAKE);
 		int currentListenNum = table->getTilesListenNum(5 - a.publicGroupNum, a.tableID, a.listenNumTable, a.listenRecordGroup, a.is_have_eyes, tempArray[i], tempArray[i]);
 		if (currentListenNum <= originListenNum) {
 			throwArray.push_back(tempArray[i]);
 		}
-		table->UpdateTableID(b.tableID, tempArray[i], TAKE);
 	}
 	std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
 #endif
@@ -513,11 +645,9 @@ int AI::ThrowTilesAnalysis(Board& b, ThrowSet* newDismantlingResult, int* startP
 		int length = b.privateHand.getTileNumArray(tempArray, tempNumArray);
 		bool isEyes = false;
 		for (int i = 0; i < length; ++i) {
-			table->UpdateTableID(b.tableID, tempArray[i], THROW);
-			if (table->getTilesListenNum(5 - b.publicGroupNum, b.tableID, isEyes) == b.listenNum) {
+			if (QueryListenNumAfterTryThrow(table, b.tableID, tempArray[i], 5 - b.publicGroupNum, isEyes) == b.listenNum) {
 				throwTiles[throwArraySize++] = tempArray[i];
 			}
-			table->UpdateTableID(b.tableID, tempArray[i], TAKE);
 		}
 
 		return throwArraySize;
@@ -645,11 +775,9 @@ int AI::ThrowTilesAnalysis(Board& b, ThrowSet* newDismantlingResult, int* startP
 		bool isEyes = false;
 		int checkArray[17], checkArraySize = 0;
 		for (int i = 0; i < sideTileSize; i++) {
-			table->UpdateTableID(b.tableID, throwTiles[i], THROW);
-			if (table->getTilesListenNum(5 - b.publicGroupNum, b.tableID, isEyes) == b.listenNum) {
+			if (QueryListenNumAfterTryThrow(table, b.tableID, throwTiles[i], 5 - b.publicGroupNum, isEyes) == b.listenNum) {
 				checkArray[checkArraySize++] = throwTiles[i];
 			}
-			table->UpdateTableID(b.tableID, throwTiles[i], TAKE);
 		}
 		if (checkArraySize > 0) {
 			sideTileSize = 0;
@@ -666,11 +794,9 @@ int AI::ThrowTilesAnalysis(Board& b, ThrowSet* newDismantlingResult, int* startP
 		bool isEyes = false;
 		int checkArray[17], checkArraySize = 0;
 		for (int i = 0; i < remainTileSize; i++) {
-			table->UpdateTableID(b.tableID, throwTiles[i], THROW);
-			if (table->getTilesListenNum(5 - b.publicGroupNum, b.tableID, isEyes) == b.listenNum) {
+			if (QueryListenNumAfterTryThrow(table, b.tableID, throwTiles[i], 5 - b.publicGroupNum, isEyes) == b.listenNum) {
 				checkArray[checkArraySize++] = throwTiles[i];
 			}
-			table->UpdateTableID(b.tableID, throwTiles[i], TAKE);
 		}
 		if (checkArraySize > 0) {
 			remainTileSize = 0;
@@ -704,11 +830,9 @@ int AI::ThrowTilesAnalysis(Board& b, ThrowSet* newDismantlingResult, int* startP
 			bool isEyes = false;
 			int checkArray[17], checkArraySize = 0;
 			for (int i = 0; i < throwArraySize; i++) {
-				table->UpdateTableID(b.tableID, throwTiles[i], THROW);
-				if (table->getTilesListenNum(5 - b.publicGroupNum, b.tableID, isEyes) == b.listenNum) {
+				if (QueryListenNumAfterTryThrow(table, b.tableID, throwTiles[i], 5 - b.publicGroupNum, isEyes) == b.listenNum) {
 					checkArray[checkArraySize++] = throwTiles[i];
 				}
-				table->UpdateTableID(b.tableID, throwTiles[i], TAKE);
 			}
 			if (checkArraySize > 0) {
 				throwArraySize = 0;
@@ -722,11 +846,9 @@ int AI::ThrowTilesAnalysis(Board& b, ThrowSet* newDismantlingResult, int* startP
 			int length = b.privateHand.getTileNumArray(tempArray, tempNumArray);
 			bool isEyes = false;
 			for (int i = 0; i < length; i++) {
-				table->UpdateTableID(b.tableID, tempArray[i], THROW);
-				if (table->getTilesListenNum(5 - b.publicGroupNum, b.tableID, isEyes) == b.listenNum) {
+				if (QueryListenNumAfterTryThrow(table, b.tableID, tempArray[i], 5 - b.publicGroupNum, isEyes) == b.listenNum) {
 					throwTiles[throwArraySize++] = tempArray[i];
 				}
-				table->UpdateTableID(b.tableID, tempArray[i], TAKE);
 			}
 			if (throwArraySize == 0) {
 				for (int i = 0; i < length; i++) {
@@ -785,11 +907,9 @@ int AI::ThrowTilesAnalysis(Board& b, ThrowSet* newDismantlingResult, int* startP
 	bool isEyes = false;
 	int checkArray[17], checkArraySize = 0;
 	for (int i = 0; i < throwArraySize; ++i) {
-		table->UpdateTableID(b.tableID, throwTiles[i], THROW);
-		if (table->getTilesListenNum(5 - b.publicGroupNum, b.tableID, isEyes) == b.listenNum) {
+		if (QueryListenNumAfterTryThrow(table, b.tableID, throwTiles[i], 5 - b.publicGroupNum, isEyes) == b.listenNum) {
 			checkArray[checkArraySize++] = throwTiles[i];
 		}
-		table->UpdateTableID(b.tableID, throwTiles[i], TAKE);
 	}
 	if (checkArraySize > 0) {
 		throwArraySize = 0;
@@ -828,7 +948,7 @@ vector<int> AI::dealEat() {
 		int moveArray[5], tempArray[17] = { 0 }, tempNumArray[17] = { 0 }, listenTilesNum[5] = { 0 }, validTileNum[5] = { 0 };
 		int index = 0;
 		int length = board.privateHand.getTileNumArray(tempArray, tempNumArray); /// privateHand中有多少牌
-		int seaCard = (wallTiles.getTileSea() / 100 - 1) * 9 + (wallTiles.getTileSea() / 10 % 10 - 1); /// Get牌海中最新被捨棄的牌，即為當前被捨的牌
+		int seaCard = CardIdToTileIndex(wallTiles.getTileSea()); /// Get牌海中最新被捨棄的牌，即為當前被捨的牌
 
 		bool ishaveEyesArray[5] = {};
 
@@ -837,10 +957,8 @@ vector<int> AI::dealEat() {
 
 		/// for每個牌種i
 		for (int i = 0; i < length; ++i) {	//Eat
-			if (i + 1 < length && tempArray[i] == seaCard + 1 && tempArray[i + 1] == seaCard + 2
-				&& seaCard / 9 == tempArray[i] / 9 && seaCard / 9 == tempArray[i + 1] / 9) { // XOO /// 34進2
-				table->UpdateTableID(board.tableID, tempArray[i], THROW);
-				table->UpdateTableID(board.tableID, tempArray[i + 1], THROW); /// 試吃 (捨掉湊成順的兩張牌)
+			if (IsTryEatLeftPattern(tempArray, length, i, seaCard)) { // XOO /// 34進2
+				TableIdPairActionGuard tempEatLeftGuard = MakeTryEatLeftGuard(table, board.tableID, tempArray[i], tempArray[i + 1]);
 				int listenNum(table->getTilesListenNum(4 - board.publicGroupNum, board.tableID, board.is_have_eyes)); /// 試吃後算進聽數
 				if (listenNum < board.listenNum) { /// 如果吃牌後進聽數會減少
 					moveArray[index] = tempArray[i] << 6 | tempArray[i + 1];
@@ -855,13 +973,9 @@ vector<int> AI::dealEat() {
 					validTileNum[index] = table->getValidTiles(board.tableID, board.predictRemainTiles, board.is_have_eyes);
 					index++;
 				}
-				table->UpdateTableID(board.tableID, tempArray[i], TAKE);
-				table->UpdateTableID(board.tableID, tempArray[i + 1], TAKE);
 			}
-			else if (i + 1 < length && tempArray[i] == seaCard - 1 && tempArray[i + 1] == seaCard + 1
-				&& seaCard / 9 == tempArray[i] / 9 && seaCard / 9 == tempArray[i + 1] / 9) { // OXO
-				table->UpdateTableID(board.tableID, tempArray[i], THROW);
-				table->UpdateTableID(board.tableID, tempArray[i + 1], THROW);
+			else if (IsTryEatMiddleAdjacentPattern(tempArray, length, i, seaCard)) { // OXO
+				TableIdPairActionGuard tempEatMiddleGuard = MakeTryEatMiddleGuard(table, board.tableID, tempArray[i], tempArray[i + 1]);
 				int listenNum(table->getTilesListenNum(4 - board.publicGroupNum, board.tableID, board.is_have_eyes));
 				if (listenNum < board.listenNum) {
 					moveArray[index] = tempArray[i] << 6 | tempArray[i + 1];
@@ -870,13 +984,9 @@ vector<int> AI::dealEat() {
 					validTileNum[index] = table->getValidTiles(board.tableID, board.predictRemainTiles, board.is_have_eyes);
 					index++;
 				}
-				table->UpdateTableID(board.tableID, tempArray[i], TAKE);
-				table->UpdateTableID(board.tableID, tempArray[i + 1], TAKE);
 			}
-			else if (i + 2 < length && tempArray[i] == seaCard - 1 && tempArray[i + 2] == seaCard + 1
-				&& seaCard / 9 == tempArray[i] / 9 && seaCard / 9 == tempArray[i + 2] / 9) { // OXO
-				table->UpdateTableID(board.tableID, tempArray[i], THROW);
-				table->UpdateTableID(board.tableID, tempArray[i + 2], THROW);
+			else if (IsTryEatMiddleGapPattern(tempArray, length, i, seaCard)) { // OXO
+				TableIdPairActionGuard tempEatMiddleGuard = MakeTryEatMiddleGuard(table, board.tableID, tempArray[i], tempArray[i + 2]);
 				int listenNum(table->getTilesListenNum(4 - board.publicGroupNum, board.tableID, board.is_have_eyes));
 				if (listenNum < board.listenNum) {
 					moveArray[index] = tempArray[i] << 6 | tempArray[i + 2];
@@ -885,13 +995,9 @@ vector<int> AI::dealEat() {
 					validTileNum[index] = table->getValidTiles(board.tableID, board.predictRemainTiles, board.is_have_eyes);
 					index++;
 				}
-				table->UpdateTableID(board.tableID, tempArray[i], TAKE);
-				table->UpdateTableID(board.tableID, tempArray[i + 2], TAKE);
 			}
-			else if (i + 1 < length && tempArray[i] == seaCard - 2 && tempArray[i + 1] == seaCard - 1
-				&& seaCard / 9 == tempArray[i] / 9 && seaCard / 9 == tempArray[i + 1] / 9) { // OOX
-				table->UpdateTableID(board.tableID, tempArray[i], THROW);
-				table->UpdateTableID(board.tableID, tempArray[i + 1], THROW);
+			else if (IsTryEatRightPattern(tempArray, length, i, seaCard)) { // OOX
+				TableIdPairActionGuard tempEatRightGuard = MakeTryEatRightGuard(table, board.tableID, tempArray[i], tempArray[i + 1]);
 				int listenNum(table->getTilesListenNum(4 - board.publicGroupNum, board.tableID, board.is_have_eyes));
 				if (listenNum < board.listenNum) {
 					moveArray[index] = tempArray[i] << 6 | tempArray[i + 1];
@@ -906,8 +1012,6 @@ vector<int> AI::dealEat() {
 					validTileNum[index] = table->getValidTiles(board.tableID, board.predictRemainTiles, board.is_have_eyes);
 					index++;
 				}
-				table->UpdateTableID(board.tableID, tempArray[i], TAKE);
-				table->UpdateTableID(board.tableID, tempArray[i + 1], TAKE);
 			}
 		}
 		if (index > 0) {
@@ -940,8 +1044,8 @@ vector<int> AI::dealEat() {
 				int temp[2];
 				int t1 = moveArray[candidate[a]] >> 6;
 				int t2 = moveArray[candidate[a]] & 63;
-				int card1 = ((t1 / 9) + 1) * 100 + ((t1 % 9) + 1) * 10;
-				int card2 = ((t2 / 9) + 1) * 100 + ((t2 % 9) + 1) * 10;
+				int card1 = TileIndexToCardBaseId(t1);
+				int card2 = TileIndexToCardBaseId(t2);
 				temp2.reserve(4);
 				temp[0] = card1;
 				temp[1] = card2;
@@ -986,14 +1090,12 @@ vector<int> AI::dealPong() {
 		int tempArray[17] = { 0 };//不重複的手排名單 AI定義
 		int tempNumArray[17] = { 0 };//上者各自的個數
 		int length = board.privateHand.getTileNumArray(tempArray, tempNumArray);//手排數量(不含重複?)
-		int seaCard = (wallTiles.getTileSea() / 100 - 1) * 9 + (wallTiles.getTileSea() / 10 % 10 - 1);
+		int seaCard = CardIdToTileIndex(wallTiles.getTileSea());
 		int move = -1;
 
 		for (int i = 0; i < length; ++i) {
 			if (tempArray[i] == seaCard && tempNumArray[i] >= 2) {//可以碰的條件
-				table->UpdateTableID(board.tableID, tempArray[i], THROW);
-				table->UpdateTableID(board.tableID, tempArray[i], THROW);
-				int listenNum(table->getTilesListenNum(4 - board.publicGroupNum, board.tableID, board.is_have_eyes));
+				int listenNum(QueryListenNumAfterTryPong(table, board.tableID, tempArray[i], 4 - board.publicGroupNum, board.is_have_eyes));
 				//printf("%d %d\n", BBlistenNum, currentListenNum);
 				if (listenNum < board.listenNum) {//假設丟了之後可以改善上聽數
 					move = tempArray[i];
@@ -1012,19 +1114,15 @@ vector<int> AI::dealPong() {
 
 					if (isNumberTile && atMiddleHasNeighbors
 						&& !connectedToFarLeft && !connectedToFarRight) {//滿足條件->不丟
-						table->UpdateTableID(board.tableID, tempArray[i], TAKE);
-						table->UpdateTableID(board.tableID, tempArray[i], TAKE);
 						return result;
 					}
 				}
 				//不滿足條件
-				table->UpdateTableID(board.tableID, tempArray[i], TAKE);
-				table->UpdateTableID(board.tableID, tempArray[i], TAKE);
 				break;
 			}
 		}
 		if (move != -1) {//沒有滿足976-083各種條件的話，但可以改善上聽數->丟
-			int card1 = ((move / 9) + 1) * 100 + ((move % 9) + 1) * 10;
+			int card1 = TileIndexToCardBaseId(move);
 			int count = 0;
 #if (SHOW_INFORMATION && !STDIN)
 			printf("Sugesstion: ");
@@ -1172,14 +1270,12 @@ vector<int> AI::dealBuGong(const int& takeTile) {
 	vector<int> result;
 	if (mode == 0) {
 		int move = -1;
-		int tile = (takeTile / 100 - 1) * 9 + (takeTile / 10 % 10 - 1);
+		int tile = CardIdToTileIndex(takeTile);
 
-		table->UpdateTableID(board.tableID, tile, THROW);
-		int listenNum(table->getTilesListenNum(5 - board.publicGroupNum, board.tableID, board.is_have_eyes));
+		int listenNum(QueryListenNumAfterTryThrow(table, board.tableID, tile, 5 - board.publicGroupNum, board.is_have_eyes));
 		if (listenNum <= board.listenNum) {
 			move = tile;
 		}
-		table->UpdateTableID(board.tableID, tile, TAKE);
 		if (move != -1) {
 			result.push_back(takeTile);
 		}
@@ -1357,47 +1453,42 @@ vector<int> AI::dealThrow() {
 			int bestImprovementCount = 0; /// 有效牌種數
 			int bestImprovementIndices[17] = { winRateIndexArray[0] };
 			int bestImprovementIndexCount = 1;
-			table->UpdateTableID(board.tableID, candidateThrowTiles[winRateIndexArray[0]], THROW); /// 丟棄勝率最高的牌，觀察剩餘進張
-			for (int suitIndex = 0; suitIndex < 3; ++suitIndex) {
-				if (board.tableID[suitIndex] != 0) {
-					for (int tileIndex = suitIndex * 9; tileIndex < suitIndex * 9 + 9; ++tileIndex) {
+			{
+				TableIdActionGuard bestThrowGuard(table, board.tableID, candidateThrowTiles[winRateIndexArray[0]], THROW, TAKE); /// 丟棄勝率最高的牌，觀察剩餘進張
+				for (int suitIndex = 0; suitIndex < 3; ++suitIndex) {
+					if (board.tableID[suitIndex] != 0) {
+						for (int tileIndex = suitIndex * 9; tileIndex < suitIndex * 9 + 9; ++tileIndex) {
+							if (board.predictRemainTiles.getRemainTilesNum(tileIndex) > 0) {
+								if (board.listenNum > QueryListenNumAfterTryTake(table, board.tableID, tileIndex, 5 - board.publicGroupNum, board.is_have_eyes)) {
+									++bestImprovementCount;
+								}
+							}
+						}
+					}
+				}
+				if (board.tableID[3] != 0) {
+					for (int tileIndex = 27; tileIndex < 34; ++tileIndex) {
 						if (board.predictRemainTiles.getRemainTilesNum(tileIndex) > 0) {
-							table->UpdateTableID(board.tableID, tileIndex, TAKE);
-							if (board.listenNum > table->getTilesListenNum(5 - board.publicGroupNum, board.tableID, board.is_have_eyes)) {
+							if (board.listenNum > QueryListenNumAfterTryTake(table, board.tableID, tileIndex, 5 - board.publicGroupNum, board.is_have_eyes)) {
 								++bestImprovementCount;
 							}
-							table->UpdateTableID(board.tableID, tileIndex, THROW);
 						}
 					}
 				}
 			}
-			if (board.tableID[3] != 0) {
-				for (int tileIndex = 27; tileIndex < 34; ++tileIndex) {
-					if (board.predictRemainTiles.getRemainTilesNum(tileIndex) > 0) {
-						table->UpdateTableID(board.tableID, tileIndex, TAKE);
-						if (board.listenNum > table->getTilesListenNum(5 - board.publicGroupNum, board.tableID, board.is_have_eyes)) {
-							++bestImprovementCount;
-						}
-						table->UpdateTableID(board.tableID, tileIndex, THROW);
-					}
-				}
-			}
-			table->UpdateTableID(board.tableID, candidateThrowTiles[winRateIndexArray[0]], TAKE);
 			bestThrowIndex = winRateIndexArray[0];
 
 			for (int candidateRank = 1; candidateRank < nodes[0].childrenNum; ++candidateRank) {
 				if (nodes[nodes[0].childIndex[winRateIndexArray[0]]].averageScore - nodes[nodes[0].childIndex[winRateIndexArray[candidateRank]]].averageScore <= 0.015) {
-					table->UpdateTableID(board.tableID, candidateThrowTiles[winRateIndexArray[candidateRank]], THROW);
+					TableIdActionGuard candidateThrowGuard(table, board.tableID, candidateThrowTiles[winRateIndexArray[candidateRank]], THROW, TAKE);
 					int improvementCount = 0;
 					for (int suitIndex = 0; suitIndex < 3; ++suitIndex) {
 						if (board.tableID[suitIndex] != 0) {
 							for (int tileIndex = suitIndex * 9; tileIndex < suitIndex * 9 + 9; ++tileIndex) {
 								if (board.predictRemainTiles.getRemainTilesNum(tileIndex) > 0) {
-									table->UpdateTableID(board.tableID, tileIndex, TAKE);
-									if (board.listenNum > table->getTilesListenNum(5 - board.publicGroupNum, board.tableID, board.is_have_eyes)) {
+									if (board.listenNum > QueryListenNumAfterTryTake(table, board.tableID, tileIndex, 5 - board.publicGroupNum, board.is_have_eyes)) {
 										++improvementCount;
 									}
-									table->UpdateTableID(board.tableID, tileIndex, THROW);
 								}
 							}
 						}
@@ -1405,11 +1496,9 @@ vector<int> AI::dealThrow() {
 					if (board.tableID[3] != 0) {
 						for (int tileIndex = 27; tileIndex < 34; ++tileIndex) {
 							if (board.predictRemainTiles.getRemainTilesNum(tileIndex) > 0) {
-								table->UpdateTableID(board.tableID, tileIndex, TAKE);
-								if (board.listenNum > table->getTilesListenNum(5 - board.publicGroupNum, board.tableID, board.is_have_eyes)) {
+								if (board.listenNum > QueryListenNumAfterTryTake(table, board.tableID, tileIndex, 5 - board.publicGroupNum, board.is_have_eyes)) {
 									++improvementCount;
 								}
-								table->UpdateTableID(board.tableID, tileIndex, THROW);
 							}
 						}
 					}
@@ -1422,7 +1511,6 @@ vector<int> AI::dealThrow() {
 					else if (bestImprovementCount == improvementCount) {
 						bestImprovementIndices[bestImprovementIndexCount++] = winRateIndexArray[candidateRank];
 					}
-					table->UpdateTableID(board.tableID, candidateThrowTiles[winRateIndexArray[candidateRank]], TAKE);
 				}
 				else {
 					break;
@@ -1738,8 +1826,7 @@ inline int AI::Simulate(const Board& a, const int& throwCard) {
 
 		// check hu
 		for (int i = 0; i < 3; i++) {
-			table->UpdateTableID(b_AI[(system.status + i) & 3].tableID, seaCard, TAKE);
-			int listenNum = table->getTilesListenNum(5 - b_AI[(system.status + i) & 3].publicGroupNum, b_AI[(system.status + i) & 3].tableID, b_AI[(system.status + i) & 3].is_have_eyes);
+			int listenNum = QueryListenNumAfterTryTake(table, b_AI[(system.status + i) & 3].tableID, seaCard, 5 - b_AI[(system.status + i) & 3].publicGroupNum, b_AI[(system.status + i) & 3].is_have_eyes);
 			if (listenNum == -1 && ((system.status + i) & 3) != myPosition) {
 				return 0;
 			}
@@ -1753,7 +1840,6 @@ inline int AI::Simulate(const Board& a, const int& throwCard) {
 				printf("\n");*/
 				return 1;
 			}
-			table->UpdateTableID(b_AI[(system.status + i) & 3].tableID, seaCard, THROW);
 		}
 
 		// check who can pong
@@ -1763,15 +1849,11 @@ inline int AI::Simulate(const Board& a, const int& throwCard) {
 			bool doPong = false;
 			if (isCanPong(tempArray, tempNumArray, length, seaCard)) {
 				b_AI[(system.status + i) & 3].listenNum = table->getTilesListenNum(5 - b_AI[(system.status + i) & 3].publicGroupNum, b_AI[(system.status + i) & 3].tableID, b_AI[(system.status + i) & 3].is_have_eyes);
-				table->UpdateTableID(b_AI[(system.status + i) & 3].tableID, seaCard, THROW);
-				table->UpdateTableID(b_AI[(system.status + i) & 3].tableID, seaCard, THROW);
-				int listenNum = table->getTilesListenNum(4 - b_AI[(system.status + i) & 3].publicGroupNum, b_AI[(system.status + i) & 3].tableID, b_AI[(system.status + i) & 3].is_have_eyes);
+				int listenNum = QueryListenNumAfterTryPong(table, b_AI[(system.status + i) & 3].tableID, seaCard, 4 - b_AI[(system.status + i) & 3].publicGroupNum, b_AI[(system.status + i) & 3].is_have_eyes);
 				if (listenNum < b_AI[(system.status + i) & 3].listenNum) {
 					doPong = true;
 				}
 				else {
-					table->UpdateTableID(b_AI[(system.status + i) & 3].tableID, seaCard, TAKE);
-					table->UpdateTableID(b_AI[(system.status + i) & 3].tableID, seaCard, TAKE);
 				}
 
 				if (doPong) {
@@ -1798,13 +1880,9 @@ inline int AI::Simulate(const Board& a, const int& throwCard) {
 				int index = 0, candidateSize = 0;
 				b_AI[system.status].listenNum = table->getTilesListenNum(5 - b_AI[system.status].publicGroupNum, b_AI[system.status].tableID, b_AI[system.status].is_have_eyes);
 				for (int i = 0; i < length; i++) {	//Eat
-					if (i + 1 < length && tempArray[i] == seaCard + 1 && tempArray[i + 1] == seaCard + 2
-						&& seaCard / 9 == tempArray[i] / 9 && seaCard / 9 == tempArray[i + 1] / 9) { // XOO
-						table->UpdateTableID(b_AI[system.status].tableID, tempArray[i], THROW);
-						table->UpdateTableID(b_AI[system.status].tableID, tempArray[i + 1], THROW);
+					if (IsTryEatLeftPattern(tempArray, length, i, seaCard)) { // XOO
+						TableIdPairActionGuard tempEatLeftGuard = MakeTryEatLeftGuard(table, b_AI[system.status].tableID, tempArray[i], tempArray[i + 1]);
 						int listenNum = table->getTilesListenNum(4 - b_AI[system.status].publicGroupNum, b_AI[system.status].tableID, b_AI[system.status].listenRecordGroup, b_AI[system.status].is_have_eyes);
-						table->UpdateTableID(b_AI[system.status].tableID, tempArray[i], TAKE);
-						table->UpdateTableID(b_AI[system.status].tableID, tempArray[i + 1], TAKE);
 						if (listenNum < b_AI[system.status].listenNum) {
 							moveArray[index] = tempArray[i] << 6 | tempArray[i + 1];
 							if (tempArray[i + 1] % 9 != 8) {
@@ -1818,13 +1896,9 @@ inline int AI::Simulate(const Board& a, const int& throwCard) {
 							index++;
 						}
 					}
-					else if (i + 1 < length && tempArray[i] == seaCard - 1 && tempArray[i + 1] == seaCard + 1
-						&& seaCard / 9 == tempArray[i] / 9 && seaCard / 9 == tempArray[i + 1] / 9) { // OXO
-						table->UpdateTableID(b_AI[system.status].tableID, tempArray[i], THROW);
-						table->UpdateTableID(b_AI[system.status].tableID, tempArray[i + 1], THROW);
+					else if (IsTryEatMiddleAdjacentPattern(tempArray, length, i, seaCard)) { // OXO
+						TableIdPairActionGuard tempEatMiddleGuard = MakeTryEatMiddleGuard(table, b_AI[system.status].tableID, tempArray[i], tempArray[i + 1]);
 						int listenNum = table->getTilesListenNum(4 - b_AI[system.status].publicGroupNum, b_AI[system.status].tableID, b_AI[system.status].listenRecordGroup, b_AI[system.status].is_have_eyes);
-						table->UpdateTableID(b_AI[system.status].tableID, tempArray[i], TAKE);
-						table->UpdateTableID(b_AI[system.status].tableID, tempArray[i + 1], TAKE);
 						if (listenNum < b_AI[system.status].listenNum) {
 							moveArray[index] = tempArray[i] << 6 | tempArray[i + 1];
 							listenTilesNum[index] = b_AI[system.status].predictRemainTiles.getRemainTilesNum(seaCard);
@@ -1832,13 +1906,9 @@ inline int AI::Simulate(const Board& a, const int& throwCard) {
 							index++;
 						}
 					}
-					else if (i + 2 < length && tempArray[i] == seaCard - 1 && tempArray[i + 2] == seaCard + 1
-						&& seaCard / 9 == tempArray[i] / 9 && seaCard / 9 == tempArray[i + 2] / 9) { // OXO
-						table->UpdateTableID(b_AI[system.status].tableID, tempArray[i], THROW);
-						table->UpdateTableID(b_AI[system.status].tableID, tempArray[i + 2], THROW);
+					else if (IsTryEatMiddleGapPattern(tempArray, length, i, seaCard)) { // OXO
+						TableIdPairActionGuard tempEatMiddleGuard = MakeTryEatMiddleGuard(table, b_AI[system.status].tableID, tempArray[i], tempArray[i + 2]);
 						int listenNum = table->getTilesListenNum(4 - b_AI[system.status].publicGroupNum, b_AI[system.status].tableID, b_AI[system.status].listenRecordGroup, b_AI[system.status].is_have_eyes);
-						table->UpdateTableID(b_AI[system.status].tableID, tempArray[i], TAKE);
-						table->UpdateTableID(b_AI[system.status].tableID, tempArray[i + 2], TAKE);
 						if (listenNum < b_AI[system.status].listenNum) {
 							moveArray[index] = tempArray[i] << 6 | tempArray[i + 2];
 							listenTilesNum[index] = b_AI[system.status].predictRemainTiles.getRemainTilesNum(seaCard);
@@ -1846,13 +1916,9 @@ inline int AI::Simulate(const Board& a, const int& throwCard) {
 							index++;
 						}
 					}
-					else if (i + 1 < length && tempArray[i] == seaCard - 2 && tempArray[i + 1] == seaCard - 1
-						&& seaCard / 9 == tempArray[i] / 9 && seaCard / 9 == tempArray[i + 1] / 9) { // OOX
-						table->UpdateTableID(b_AI[system.status].tableID, tempArray[i], THROW);
-						table->UpdateTableID(b_AI[system.status].tableID, tempArray[i + 1], THROW);
+					else if (IsTryEatRightPattern(tempArray, length, i, seaCard)) { // OOX
+						TableIdPairActionGuard tempEatRightGuard = MakeTryEatRightGuard(table, b_AI[system.status].tableID, tempArray[i], tempArray[i + 1]);
 						int listenNum = table->getTilesListenNum(4 - b_AI[system.status].publicGroupNum, b_AI[system.status].tableID, b_AI[system.status].listenRecordGroup, b_AI[system.status].is_have_eyes);
-						table->UpdateTableID(b_AI[system.status].tableID, tempArray[i], TAKE);
-						table->UpdateTableID(b_AI[system.status].tableID, tempArray[i + 1], TAKE);
 						if (listenNum < b_AI[system.status].listenNum) {
 							moveArray[index] = tempArray[i] << 6 | tempArray[i + 1];
 							if (tempArray[i] % 9 != 0) {
@@ -1948,8 +2014,7 @@ inline int AI::Simulate(const Board& a, const int& throwCard) {
 
 		// check hu
 		for (int i = 0; i < 3; i++) { /// 上次捨牌玩家以外的三名玩家(因為system.status已更新)
-			table->UpdateTableID(b_AI[(system.status + i) & 3].tableID, seaCard, TAKE); /// 試拿並計算進聽數
-			int listenNum = table->getTilesListenNum(5 - b_AI[(system.status + i) & 3].publicGroupNum, b_AI[(system.status + i) & 3].tableID, b_AI[(system.status + i) & 3].is_have_eyes); /// 試拿後的進聽數
+			int listenNum = QueryListenNumAfterTryTake(table, b_AI[(system.status + i) & 3].tableID, seaCard, 5 - b_AI[(system.status + i) & 3].publicGroupNum, b_AI[(system.status + i) & 3].is_have_eyes); /// 試拿後的進聽數
 			if (listenNum == -1 && ((system.status + i) & 3) != myPosition && finalThrowPlayer != myPosition) { /// 除了我方外的其他三位玩家是否會胡 // Modified
 				return 0; /// 別人胡牌
 			}
@@ -1963,7 +2028,6 @@ inline int AI::Simulate(const Board& a, const int& throwCard) {
 				printf("\n");*/
 				return 1; /// 我方胡牌
 			}
-			table->UpdateTableID(b_AI[(system.status + i) & 3].tableID, seaCard, THROW); /// 回復試拿操作
 		}
 
 		// check who can pong
@@ -1973,15 +2037,11 @@ inline int AI::Simulate(const Board& a, const int& throwCard) {
 			bool doPong = false;
 			if (isCanPong(tempArray, tempNumArray, length, seaCard)) { /// 如果我方能碰該牌
 				b_AI[myPosition].listenNum = table->getTilesListenNum(5 - b_AI[myPosition].publicGroupNum, b_AI[myPosition].tableID, b_AI[myPosition].is_have_eyes); /// 先記錄碰前進聽數
-				table->UpdateTableID(b_AI[myPosition].tableID, seaCard, THROW);
-				table->UpdateTableID(b_AI[myPosition].tableID, seaCard, THROW); /// 試碰
-				int listenNum = table->getTilesListenNum(4 - b_AI[myPosition].publicGroupNum, b_AI[myPosition].tableID, b_AI[myPosition].is_have_eyes); /// 計算碰後進聽數
+				int listenNum = QueryListenNumAfterTryPong(table, b_AI[myPosition].tableID, seaCard, 4 - b_AI[myPosition].publicGroupNum, b_AI[myPosition].is_have_eyes); /// 計算碰後進聽數
 				if (listenNum < b_AI[myPosition].listenNum) { /// 若碰前後進聽數有減少，則碰
 					doPong = true;
 				}
-				else { /// 若碰前後進聽數沒有減少則回復試碰操作
-					table->UpdateTableID(b_AI[myPosition].tableID, seaCard, TAKE);
-					table->UpdateTableID(b_AI[myPosition].tableID, seaCard, TAKE);
+				else { /// 若碰前後進聽數沒有減少則維持不碰
 				}
 
 				if (doPong) { /// 真的碰牌 // Redundant??
@@ -2005,13 +2065,8 @@ inline int AI::Simulate(const Board& a, const int& throwCard) {
 					int index = 0, candidateSize = 0;
 					b_AI[myPosition].listenNum = table->getTilesListenNum(5 - b_AI[myPosition].publicGroupNum, b_AI[myPosition].tableID, b_AI[myPosition].is_have_eyes); /// 先記錄吃前進聽數
 					for (int i = 0; i < length; i++) {	//Eat
-						if (i + 1 < length && tempArray[i] == seaCard + 1 && tempArray[i + 1] == seaCard + 2
-							&& seaCard / 9 == tempArray[i] / 9 && seaCard / 9 == tempArray[i + 1] / 9) { // XOO
-							table->UpdateTableID(b_AI[myPosition].tableID, tempArray[i], THROW);
-							table->UpdateTableID(b_AI[myPosition].tableID, tempArray[i + 1], THROW);
-							int listenNum = table->getTilesListenNum(4 - b_AI[system.status].publicGroupNum, b_AI[myPosition].tableID, b_AI[myPosition].is_have_eyes);
-							table->UpdateTableID(b_AI[myPosition].tableID, tempArray[i], TAKE);
-							table->UpdateTableID(b_AI[myPosition].tableID, tempArray[i + 1], TAKE);
+						if (IsTryEatLeftPattern(tempArray, length, i, seaCard)) { // XOO
+							int listenNum = QueryListenNumAfterTryEatLeft(table, b_AI[myPosition].tableID, tempArray[i], tempArray[i + 1], 4 - b_AI[system.status].publicGroupNum, b_AI[myPosition].is_have_eyes);
 							if (listenNum < b_AI[myPosition].listenNum) {
 								moveArray[index] = tempArray[i] << 6 | tempArray[i + 1];
 								if (tempArray[i + 1] % 9 != 8) {
@@ -2025,13 +2080,8 @@ inline int AI::Simulate(const Board& a, const int& throwCard) {
 								index++;
 							}
 						}
-						else if (i + 1 < length && tempArray[i] == seaCard - 1 && tempArray[i + 1] == seaCard + 1
-							&& seaCard / 9 == tempArray[i] / 9 && seaCard / 9 == tempArray[i + 1] / 9) { // OXO
-							table->UpdateTableID(b_AI[myPosition].tableID, tempArray[i], THROW);
-							table->UpdateTableID(b_AI[myPosition].tableID, tempArray[i + 1], THROW);
-							int listenNum = table->getTilesListenNum(4 - b_AI[myPosition].publicGroupNum, b_AI[myPosition].tableID, b_AI[myPosition].is_have_eyes);
-							table->UpdateTableID(b_AI[myPosition].tableID, tempArray[i], TAKE);
-							table->UpdateTableID(b_AI[myPosition].tableID, tempArray[i + 1], TAKE);
+						else if (IsTryEatMiddleAdjacentPattern(tempArray, length, i, seaCard)) { // OXO
+							int listenNum = QueryListenNumAfterTryEatMiddle(table, b_AI[myPosition].tableID, tempArray[i], tempArray[i + 1], 4 - b_AI[myPosition].publicGroupNum, b_AI[myPosition].is_have_eyes);
 							if (listenNum < b_AI[myPosition].listenNum) {
 								moveArray[index] = tempArray[i] << 6 | tempArray[i + 1];
 								listenTilesNum[index] = b_AI[myPosition].predictRemainTiles.getRemainTilesNum(seaCard);
@@ -2039,13 +2089,8 @@ inline int AI::Simulate(const Board& a, const int& throwCard) {
 								index++;
 							}
 						}
-						else if (i + 2 < length && tempArray[i] == seaCard - 1 && tempArray[i + 2] == seaCard + 1
-							&& seaCard / 9 == tempArray[i] / 9 && seaCard / 9 == tempArray[i + 2] / 9) { // OXO
-							table->UpdateTableID(b_AI[myPosition].tableID, tempArray[i], THROW);
-							table->UpdateTableID(b_AI[myPosition].tableID, tempArray[i + 2], THROW);
-							int listenNum = table->getTilesListenNum(4 - b_AI[system.status].publicGroupNum, b_AI[myPosition].tableID, b_AI[myPosition].is_have_eyes);
-							table->UpdateTableID(b_AI[myPosition].tableID, tempArray[i], TAKE);
-							table->UpdateTableID(b_AI[myPosition].tableID, tempArray[i + 2], TAKE);
+						else if (IsTryEatMiddleGapPattern(tempArray, length, i, seaCard)) { // OXO
+							int listenNum = QueryListenNumAfterTryEatMiddle(table, b_AI[myPosition].tableID, tempArray[i], tempArray[i + 2], 4 - b_AI[system.status].publicGroupNum, b_AI[myPosition].is_have_eyes);
 							if (listenNum < b_AI[myPosition].listenNum) {
 								moveArray[index] = tempArray[i] << 6 | tempArray[i + 2];
 								listenTilesNum[index] = b_AI[myPosition].predictRemainTiles.getRemainTilesNum(seaCard);
@@ -2053,13 +2098,8 @@ inline int AI::Simulate(const Board& a, const int& throwCard) {
 								index++;
 							}
 						}
-						else if (i + 1 < length && tempArray[i] == seaCard - 2 && tempArray[i + 1] == seaCard - 1
-							&& seaCard / 9 == tempArray[i] / 9 && seaCard / 9 == tempArray[i + 1] / 9) { // OOX
-							table->UpdateTableID(b_AI[myPosition].tableID, tempArray[i], THROW);
-							table->UpdateTableID(b_AI[myPosition].tableID, tempArray[i + 1], THROW);
-							int listenNum = table->getTilesListenNum(4 - b_AI[myPosition].publicGroupNum, b_AI[myPosition].tableID, b_AI[myPosition].is_have_eyes);
-							table->UpdateTableID(b_AI[myPosition].tableID, tempArray[i], TAKE);
-							table->UpdateTableID(b_AI[myPosition].tableID, tempArray[i + 1], TAKE);
+						else if (IsTryEatRightPattern(tempArray, length, i, seaCard)) { // OOX
+							int listenNum = QueryListenNumAfterTryEatRight(table, b_AI[myPosition].tableID, tempArray[i], tempArray[i + 1], 4 - b_AI[myPosition].publicGroupNum, b_AI[myPosition].is_have_eyes);
 							if (listenNum < b_AI[myPosition].listenNum) {
 								moveArray[index] = tempArray[i] << 6 | tempArray[i + 1];
 								if (tempArray[i] % 9 != 0) {
@@ -2192,13 +2232,10 @@ inline int AI::Simulate(const Board& a, const int& throwCard) {
 		if (finalThrowPlayer != b.myPosition) { /// 如果最後一個出牌的人不是自己
 			// check chuck
 			/// 檢查拿該玩家捨去的牌後是否會胡牌
-			table->UpdateTableID(b.tableID, seaCard, TAKE); /// 拿牌
-			int listenNum(table->getTilesListenNum(5 - b.publicGroupNum, b.tableID, b.is_have_eyes)); /// 計算取後上聽數
+			int listenNum(QueryListenNumAfterTryTake(table, b.tableID, seaCard, 5 - b.publicGroupNum, b.is_have_eyes)); /// 計算取後上聽數
 			if (listenNum == -1) { /// 拿了該牌後會胡牌
 				return 1; /// 贏了，return 1
 			}
-			/// 如果不會胡牌，復原剛剛拿牌的操作
-			table->UpdateTableID(b.tableID, seaCard, THROW);
 
 			int tempArray[17] = { 0 }, tempNumArray[17] = { 0 };
 			/// 將目前自家暗牌的資訊寫到tempArray與tempNumArray，並把length設為牌種數
@@ -2207,11 +2244,8 @@ inline int AI::Simulate(const Board& a, const int& throwCard) {
 			for (int j = 0; j < length; ++j) {
 				/// 如果暗牌中有丟出的牌，且數量 >= 2
 				if (tempArray[j] == seaCard && tempNumArray[j] >= 2) { /// Pong
-					/// 把與海底牌碰的兩張牌從自家暗牌的集合裡移出
-					table->UpdateTableID(b.tableID, tempArray[j], THROW);
-					table->UpdateTableID(b.tableID, tempArray[j], THROW);
 					/// 試算碰完的上聽數(用4扣，因為碰完會多一組)
-					int listenNum(table->getTilesListenNum(4 - b.publicGroupNum, b.tableID, b.is_have_eyes));
+					int listenNum(QueryListenNumAfterTryPong(table, b.tableID, tempArray[j], 4 - b.publicGroupNum, b.is_have_eyes));
 					if (listenNum < b.listenNum) { /// 如果碰會使上聽數減少
 						/// 檢查j牌附近是否有順子，如果有順子且順子的左右兩邊任一邊沒有牌(01110)，就不碰
 						/// 如果是131的狀況不碰嗎
@@ -2221,9 +2255,7 @@ inline int AI::Simulate(const Board& a, const int& throwCard) {
 							&& ((j > 1 && (j + 2) < length && tempArray[j - 2] + 2 != tempArray[j] && tempArray[j + 2] - 2 != tempArray[j])
 								|| ((j + 2) < length && tempArray[j + 2] - 2 != tempArray[j])
 								|| (j > 1 && tempArray[j - 2] + 2 != tempArray[j]))) {
-							/// 選擇不碰牌，把剛剛試算碰牌時移除的兩張自家暗牌取回
-							table->UpdateTableID(b.tableID, tempArray[j], TAKE);
-							table->UpdateTableID(b.tableID, tempArray[j], TAKE);
+							/// 選擇不碰牌，直接維持原狀
 							break;
 						}
 						/// 其餘上聽數有因為碰而減少的情況，則執行碰牌
@@ -2236,9 +2268,7 @@ inline int AI::Simulate(const Board& a, const int& throwCard) {
 						b.listenNum--; /// 上聽數--
 						break;
 					}
-					else { /// 若碰該牌不會減少上聽數，則不碰，復原試碰操作，把牌加回暗牌集合
-						table->UpdateTableID(b.tableID, tempArray[j], TAKE);
-						table->UpdateTableID(b.tableID, tempArray[j], TAKE);
+					else { /// 若碰該牌不會減少上聽數，則不碰
 					}
 				}
 			}
@@ -2251,13 +2281,8 @@ inline int AI::Simulate(const Board& a, const int& throwCard) {
 				int index(0), moveArray[5], listenTilesNum[5] = { 0 }, validTileNum[5] = { 0 };
 				bool ishaveEyesArray[5] = {};
 				for (int i = 0; i < length; ++i) {	//Eat
-					if (i + 1 < length && tempArray[i] == seaCard + 1 && tempArray[i + 1] == seaCard + 2
-						&& seaCard / 9 == tempArray[i] / 9 && seaCard / 9 == tempArray[i + 1] / 9) { // XOO /// 吃牌條件(34進2)
-						table->UpdateTableID(b.tableID, tempArray[i], THROW); /// 試吃
-						table->UpdateTableID(b.tableID, tempArray[i + 1], THROW);
-						int listenNum(table->getTilesListenNum(4 - b.publicGroupNum, b.tableID, b.is_have_eyes)); /// 試吃完算進聽數
-						table->UpdateTableID(b.tableID, tempArray[i], TAKE); /// 回復因為試吃丟牌的操作
-						table->UpdateTableID(b.tableID, tempArray[i + 1], TAKE);
+					if (IsTryEatLeftPattern(tempArray, length, i, seaCard)) { // XOO /// 吃牌條件(34進2)
+						int listenNum(QueryListenNumAfterTryEatLeft(table, b.tableID, tempArray[i], tempArray[i + 1], 4 - b.publicGroupNum, b.is_have_eyes)); /// 試吃完算進聽數
 						if (listenNum < b.listenNum) { /// 若吃牌有助於減少進聽數
 							moveArray[index] = tempArray[i] << 6 | tempArray[i + 1]; /// 把跟seaCard湊成組的牌寫入moveArray
 							/// 計算如果不吃牌的話要聽多少牌
@@ -2273,13 +2298,8 @@ inline int AI::Simulate(const Board& a, const int& throwCard) {
 							index++;
 						}
 					}
-					else if (i + 1 < length && tempArray[i] == seaCard - 1 && tempArray[i + 1] == seaCard + 1
-						&& seaCard / 9 == tempArray[i] / 9 && seaCard / 9 == tempArray[i + 1] / 9) { // OXO /// 24進3
-						table->UpdateTableID(b.tableID, tempArray[i], THROW);
-						table->UpdateTableID(b.tableID, tempArray[i + 1], THROW);
-						int listenNum(table->getTilesListenNum(4 - b.publicGroupNum, b.tableID, b.is_have_eyes));
-						table->UpdateTableID(b.tableID, tempArray[i], TAKE);
-						table->UpdateTableID(b.tableID, tempArray[i + 1], TAKE);
+					else if (IsTryEatMiddleAdjacentPattern(tempArray, length, i, seaCard)) { // OXO /// 24進3
+						int listenNum(QueryListenNumAfterTryEatMiddle(table, b.tableID, tempArray[i], tempArray[i + 1], 4 - b.publicGroupNum, b.is_have_eyes));
 						if (listenNum < b.listenNum) { /// 原本聽3
 							moveArray[index] = tempArray[i] << 6 | tempArray[i + 1];
 							listenTilesNum[index] = b.predictRemainTiles.getRemainTilesNum(seaCard);
@@ -2288,13 +2308,8 @@ inline int AI::Simulate(const Board& a, const int& throwCard) {
 							index++;
 						}
 					}
-					else if (i + 2 < length && tempArray[i] == seaCard - 1 && tempArray[i + 2] == seaCard + 1
-						&& seaCard / 9 == tempArray[i] / 9 && seaCard / 9 == tempArray[i + 2] / 9) { // OXO /// 234進3
-						table->UpdateTableID(b.tableID, tempArray[i], THROW);
-						table->UpdateTableID(b.tableID, tempArray[i + 2], THROW);
-						int listenNum(table->getTilesListenNum(4 - b.publicGroupNum, b.tableID, b.is_have_eyes));
-						table->UpdateTableID(b.tableID, tempArray[i], TAKE);
-						table->UpdateTableID(b.tableID, tempArray[i + 2], TAKE);
+					else if (IsTryEatMiddleGapPattern(tempArray, length, i, seaCard)) { // OXO /// 234進3
+						int listenNum(QueryListenNumAfterTryEatMiddle(table, b.tableID, tempArray[i], tempArray[i + 2], 4 - b.publicGroupNum, b.is_have_eyes));
 						if (listenNum < b.listenNum) {
 							moveArray[index] = tempArray[i] << 6 | tempArray[i + 2];
 							listenTilesNum[index] = b.predictRemainTiles.getRemainTilesNum(seaCard);
@@ -2303,13 +2318,8 @@ inline int AI::Simulate(const Board& a, const int& throwCard) {
 							index++;
 						}
 					}
-					else if (i + 1 < length && tempArray[i] == seaCard - 2 && tempArray[i + 1] == seaCard - 1
-						&& seaCard / 9 == tempArray[i] / 9 && seaCard / 9 == tempArray[i + 1] / 9) { // OOX /// 23進4
-						table->UpdateTableID(b.tableID, tempArray[i], THROW);
-						table->UpdateTableID(b.tableID, tempArray[i + 1], THROW);
-						int listenNum(table->getTilesListenNum(4 - b.publicGroupNum, b.tableID, b.is_have_eyes));
-						table->UpdateTableID(b.tableID, tempArray[i], TAKE);
-						table->UpdateTableID(b.tableID, tempArray[i + 1], TAKE);
+					else if (IsTryEatRightPattern(tempArray, length, i, seaCard)) { // OOX /// 23進4
+						int listenNum(QueryListenNumAfterTryEatRight(table, b.tableID, tempArray[i], tempArray[i + 1], 4 - b.publicGroupNum, b.is_have_eyes));
 						if (listenNum < b.listenNum) {
 							moveArray[index] = tempArray[i] << 6 | tempArray[i + 1];
 							if (tempArray[i] % 9 != 0) { /// 原本聽14
@@ -2883,28 +2893,4 @@ inline void AI::MCTS(const Board& currentBoard, const int* throwList, const int&
 	clsLog << ttCollisionCount << "," << ttHitCount << "\n";
 	clsLog.close();
 #endif
-}
-
-//-----------------------------  Tools  -----------------------------------
-
-int AI::Partition(int* childOrder, int left, int right) {
-	const double pivotScore = nodes[nodes[0].childIndex[childOrder[right]]].averageScore;
-	int partitionIndex = left - 1;
-	for (int currentIndex = left; currentIndex < right; ++currentIndex) {
-		if (nodes[nodes[0].childIndex[childOrder[currentIndex]]].averageScore > pivotScore) {
-			++partitionIndex;
-			std::swap(childOrder[partitionIndex], childOrder[currentIndex]);
-		}
-	}
-	++partitionIndex;
-	std::swap(childOrder[partitionIndex], childOrder[right]);
-	return partitionIndex;
-}
-
-void AI::QuickSort(int* childOrder, int left, int right) {
-	if (left < right) {
-		const int pivotIndex = Partition(childOrder, left, right);
-		QuickSort(childOrder, left, pivotIndex - 1);
-		QuickSort(childOrder, pivotIndex + 1, right);
-	}
 }
