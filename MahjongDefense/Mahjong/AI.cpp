@@ -55,26 +55,52 @@ struct NODE {
 	short int childIndex[578];
 } nodes[SHRT_MAX];
 
-AI::AI(const int& ID, const vector<int>& cards, Table* table) : Player(ID, cards) {
+namespace {
+/// 專案外部的牌 ID 例如 110 / 120 / 330，AI 內部會統一轉成 0~33 的牌種索引。
+inline int CardIdToTileIndex(const int cardId) {
+	return (cardId / 100 - 1) * 9 + (cardId / 10 % 10 - 1);
+}
+
+/// 把 AI 內部的 0~33 牌種索引轉回對應花色的牌 ID 基底，例如 0 -> 110。
+inline int TileIndexToCardBaseId(const int tileIndex) {
+	return ((tileIndex / 9) + 1) * 100 + ((tileIndex % 9) + 1) * 10;
+}
+
+/// 同一種牌在手上可能有 4 張實體牌，這裡負責找出目前真的持有的那一張 cardId。
+inline int FindCardIdInHand(PrivateHand& hand, const int tileIndex) {
+	const int cardBaseId = TileIndexToCardBaseId(tileIndex);
+	for (int offset = 0; offset < 4; ++offset) {
+		const int cardId = cardBaseId + offset;
+		if (hand.findCard(cardId)) {
+			return cardId;
+		}
+	}
+	return -1;
+}
+
+constexpr int kTileTypeCount = 34;
+}
+
+AI::AI(const int& playerId, const vector<int>& cards, Table* table) : Player(playerId, cards) {
 	this->mode = 0;
 	this->table = table;
-	this->board.myPosition = ID - 1;
-	for (auto& cardID : cards) {
-		int tile = (cardID / 100 - 1) * 9 + (cardID / 10 % 10 - 1);
-		board.predictRemainTiles.AddCard(tile);
-		board.privateHand.AddHand(tile, hashKey); // Modified
+	this->board.myPosition = playerId - 1;
+	for (const auto& cardId : cards) {
+		const int tileIndex = CardIdToTileIndex(cardId);
+		board.predictRemainTiles.AddCard(tileIndex);
+		board.privateHand.AddHand(tileIndex, hashKey); // Modified
 	}
-	vector<int> throwTiles;
-	MoveThrow(throwTiles);
+	vector<int> initialThrowTiles;
+	MoveThrow(initialThrowTiles);
 
 #if !STDIN
 	ShowGameInformation(cards);
 #endif // !STDIN
 }
 
-AI::AI(const int& ID, const vector<int>& cards) : Player(ID, cards) {
+AI::AI(const int& playerId, const vector<int>& cards) : Player(playerId, cards) {
 	this->mode = 2;
-	this->board.myPosition = ID - 1;
+	this->board.myPosition = playerId - 1;
 
 #if !STDIN
 	ShowGameInformation(cards);
@@ -194,43 +220,45 @@ constexpr int AI::who_won(const Board& b) {
 	}
 }
 
-/// 將要捨的牌種寫入throwArray，回傳捨牌集合長度
+/// 將要捨的牌種寫入 throwArray，回傳捨牌集合長度
 inline int AI::ThrowList(Board& b, int* throwArray) {
+	// 先從拆牌表找出「不會讓目前手牌更差」的候選，再交由 ThrowTilesAnalysis 進一步篩選。
 	// action: take-> 0、eat-> 1、pong -> 2、gong ->3、 throw -> 4
-	// ===== Search Dismantling Table ==========
-	/// Dismantling table是把牌拆成一部分一部分的表
 #if (DISMANTLING_MODE == 0)
-	if (b.listenNum == 0) { /// 聽牌階段
-		int tempArray[17] = { 0 }, tempNumArray[17] = { 0 };
-		/// length是暗牌種數, throwSize是捨牌集合的長度
-		int length = b.privateHand.getTileNumArray(tempArray, tempNumArray), throwSize = 0;
+	if (b.listenNum == 0) { /// 聽牌階段：只保留不破壞聽牌的捨牌
+		int handTileTypes[17] = { 0 };
+		int handTileCounts[17] = { 0 };
+		int candidateCount = 0;
+		const int distinctTileCount = b.privateHand.getTileNumArray(handTileTypes, handTileCounts);
 		bool isEyes = false;
-		for (int i = 0; i < length; i++) {
-			table->UpdateTableID(b.tableID, tempArray[i], THROW); /// 試捨
+		for (int tileTypeIndex = 0; tileTypeIndex < distinctTileCount; ++tileTypeIndex) {
+			table->UpdateTableID(b.tableID, handTileTypes[tileTypeIndex], THROW); /// 試捨
 			if (table->getTilesListenNum(5 - b.publicGroupNum, b.tableID, isEyes) == b.listenNum) {
-				throwArray[throwSize++] = tempArray[i]; /// 找出捨牌後不會增加進聽數的牌
+				throwArray[candidateCount++] = handTileTypes[tileTypeIndex]; /// 找出捨牌後不會增加進聽數的牌
 			}
-			table->UpdateTableID(b.tableID, tempArray[i], TAKE); /// 回覆試捨操作
+			table->UpdateTableID(b.tableID, handTileTypes[tileTypeIndex], TAKE); /// 回復試捨操作
 		}
-
-		return throwSize;
+		return candidateCount;
 	}
-	ThrowSet newDismantlingResult[250];
-	int startPosition[90] = { 0 }, throwContentType[90][4] = { 0 };
-	int startPositionSize = table->getDismantling(b.tableID, b.is_have_eyes, newDismantlingResult, startPosition, throwContentType);
+
+	ThrowSet dismantlingGroups[250];
+	int groupStartOffsets[90] = { 0 };
+	int groupSuitTypes[90][4] = { 0 };
+	const int dismantlingGroupCount = table->getDismantling(b.tableID, b.is_have_eyes, dismantlingGroups, groupStartOffsets, groupSuitTypes);
 #if (SHOW_DISMANTLING_RESULT && !STDIN)
-	//board.privateHand.ShowPrivateHand();
 	printf("newDismantlingResult\n");
-	for (int i = 0; i < startPositionSize; i++) {
-		for (int j = startPosition[i], g = 0; j < startPosition[i + 1]; j++, g++) {
-			for (int a = 0; a < newDismantlingResult[j].oneSize; a++) {
-				printf("%d, ", newDismantlingResult[j].one[a] + throwContentType[i][g] * 9);
+	for (int groupIndex = 0; groupIndex < dismantlingGroupCount; ++groupIndex) {
+		for (int dismantlingIndex = groupStartOffsets[groupIndex], suitGroupIndex = 0;
+			dismantlingIndex < groupStartOffsets[groupIndex + 1];
+			++dismantlingIndex, ++suitGroupIndex) {
+			for (int singleIndex = 0; singleIndex < dismantlingGroups[dismantlingIndex].oneSize; ++singleIndex) {
+				printf("%d, ", dismantlingGroups[dismantlingIndex].one[singleIndex] + groupSuitTypes[groupIndex][suitGroupIndex] * 9);
 			}
-			for (int a = 0; a < newDismantlingResult[j].pairSize; a++) {
-				printf("%d %d, ", newDismantlingResult[j].pair[a] + throwContentType[i][g] * 9, newDismantlingResult[j].pair[a] + throwContentType[i][g] * 9);
+			for (int pairIndex = 0; pairIndex < dismantlingGroups[dismantlingIndex].pairSize; ++pairIndex) {
+				printf("%d %d, ", dismantlingGroups[dismantlingIndex].pair[pairIndex] + groupSuitTypes[groupIndex][suitGroupIndex] * 9, dismantlingGroups[dismantlingIndex].pair[pairIndex] + groupSuitTypes[groupIndex][suitGroupIndex] * 9);
 			}
-			for (int a = 0; a < newDismantlingResult[j].tatsuSize << 1; a += 2) {
-				printf("%d %d, ", newDismantlingResult[j].tatsu[a] + throwContentType[i][g] * 9, newDismantlingResult[j].tatsu[a + 1] + throwContentType[i][g] * 9);
+			for (int tatsuIndex = 0; tatsuIndex < dismantlingGroups[dismantlingIndex].tatsuSize << 1; tatsuIndex += 2) {
+				printf("%d %d, ", dismantlingGroups[dismantlingIndex].tatsu[tatsuIndex] + groupSuitTypes[groupIndex][suitGroupIndex] * 9, dismantlingGroups[dismantlingIndex].tatsu[tatsuIndex + 1] + groupSuitTypes[groupIndex][suitGroupIndex] * 9);
 			}
 		}
 		printf("\n");
@@ -250,27 +278,23 @@ inline int AI::ThrowList(Board& b, int* throwArray) {
 		}
 		table->UpdateTableID(b.tableID, tempArray[i], TAKE);
 	}
-	//vector<int> throwArray = table->getListenDismantling(b.tableID, b.listenRecordGroup, b.is_have_eyes, -1, b.throwTile);
 	std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
-	//printf("Spend Time: %lld\n", std::chrono::duration_cast<std::chrono::nanoseconds> (end - begin).count()); //35500	
-	/*for (unsigned i = 0; i < throwArray.size(); i++)
-	{
-		printf("%d ", throwArray[i]);
-	}*/
 #endif
 
-	// ===== Throw Tiles Analysis for Dismantling ==========
 #if(DISMANTLING_MODE == 0)
-	//std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
-	return ThrowTilesAnalysis(b, newDismantlingResult, startPosition, throwArray, throwContentType, startPositionSize);
-	//std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
-	//printf("Spend Time: %lld\n", std::chrono::duration_cast<std::chrono::nanoseconds> (end - begin).count()); //27900，26600，23100，32300->24475
+	return ThrowTilesAnalysis(b, dismantlingGroups, groupStartOffsets, throwArray, groupSuitTypes, dismantlingGroupCount);
 #elif (DISMANTLING_MODE == 1)
 	return ThrowTilesAnalysis(b, throwArray);
 #endif
 }
 
 int AI::ThrowTilesAnalysis(Board& b, ThrowSet* newDismantlingResult, int* startPosition, int* throwTiles, int(*throwContentType)[4], const int& startPositionSize) {
+	/// 這個函式負責把「拆牌表結果」轉成捨牌候選。
+	/// 可以把它分成四個閱讀階段：
+	/// 1. 先統計每種拆法的進張數、卡洞數與孤張資訊
+	/// 2. 選出目前最值得採用的拆法(recordIndex)
+	/// 3. 優先處理字牌、邊張、孤張等通常較差的形狀
+	/// 4. 如果還無法決定，再比較對子 / 搭子的進張表現
 	char pairListenTilesNum[90][8] = { 0 }, pairListenHoleNum[90][8] = { 0 }, tatsuListenTilesNum[90][16] = { 0 }, tatsuListenHoleNum[90][16] = { 0 }
 	, oneListenTilesNum[90][17] = { 0 }, totalListenTilesNum[90] = { 0 }, totalListenHoleNum[90] = { 0 }, minListenSingleTileNum[90];
 	char wordTiles[90][17] = { 0 }, eyeTiles[90][8] = { 0 }, tatsuTiles[90][16] = { 0 }, totalSize[90] = { 0 };
@@ -1169,192 +1193,118 @@ vector<int> AI::dealHu() {
 }
 
 vector<int> AI::dealThrow() {
+	/// `dealThrow` 是 AI 真正決定要丟哪張牌的入口。
+	/// 閱讀時可把流程切成四段：
+	/// 1. 先找出不會讓手牌明顯變差的候選捨牌
+	/// 2. 視局勢套用防守或末盤保守策略
+	/// 3. 若候選仍很多，再交給 MCTS 做模擬評分
+	/// 4. 若分數接近，最後用進張數與場上資訊做 tie-break
 	vector<int> result;
 	if (mode == 0) {
-		int record = 0;
-
-		//std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
-		int throwList[17] = { 0 };
-		int throwArraySize(ThrowList(board, throwList));
-		//std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
-		//printf("Spend Time: %lld\n", std::chrono::duration_cast<std::chrono::nanoseconds> (end - begin).count()); //35500
+		int bestThrowIndex = 0;
+		int candidateThrowTiles[17] = { 0 };
+		int candidateThrowCount = ThrowList(board, candidateThrowTiles);
 
 #if (SHOW_THROW_LIST && !STDIN)
 		printf("throwList ");
-		for (int i = 0; i < throwArraySize; ++i) {
-			printf("%d ", throwList[i]);
+		for (int candidateIndex = 0; candidateIndex < candidateThrowCount; ++candidateIndex) {
+			printf("%d ", candidateThrowTiles[candidateIndex]);
 		}
 		printf("\n");
 #endif
-		int remainNumber = board.predictRemainTiles.getRemainTotalTilesNum() - 64 + oppGroup;
-		/*if (remainNumber > 16 && remainNumber <= 24 && board.listenNum > 0) {
-			int riskArray[17] = { 0 }, minRiskNum = 999;
-			for (int i = 0; i < throwArraySize; i++) {
-				if (throwList[i] / 9 != 3 && throwList[i] % 9 - 2 >= 0) {
-					if (board.predictRemainTiles.getRemainTilesNum(throwList[i] - 2) > 0 && board.predictRemainTiles.getRemainTilesNum(throwList[i] - 1) > 0) {
-						riskArray[i]++;
-					}
-				}
-				if (throwList[i] / 9 != 3 && throwList[i] % 9 - 1 >= 0 && throwList[i] % 9 + 1 <= 8) {
-					if (board.predictRemainTiles.getRemainTilesNum(throwList[i] - 1) > 0 && board.predictRemainTiles.getRemainTilesNum(throwList[i] + 1) > 0) {
-						riskArray[i]++;
-					}
-				}
-				if (throwList[i] / 9 != 3 && throwList[i] % 9 + 2 <= 8) {
-					if (board.predictRemainTiles.getRemainTilesNum(throwList[i] + 2) > 0 && board.predictRemainTiles.getRemainTilesNum(throwList[i] + 1) > 0) {
-						riskArray[i]++;
-					}
-				}
 
-				int card = ((throwList[i] / 9) + 1) * 100 + ((throwList[i] % 9) + 1) * 10;
-				int specificTileNum = 0;
-				for (int j = 0; j < 4; j++) {
-					int cardId = card + j;
-					if (privateHand.findCard(cardId) == true) {
-						specificTileNum++;
-					}
-				}
-				// check pong probability
-				if (board.predictRemainTiles.getRemainTilesNum(throwList[i]) >= 2) {
-					riskArray[i] += 2;
-				}
-				if (minRiskNum > riskArray[i]) {
-					minRiskNum = riskArray[i];
-				}
+		auto tryPickOwnedCard = [this, &result](const int tileIndex) -> bool {
+			const int cardId = FindCardIdInHand(privateHand, tileIndex);
+			if (cardId != -1) {
+				result.push_back(cardId);
+				return true;
 			}
-			int tempArraySize = 0;
-			for (int i = 0; i < throwArraySize; i++) {
-				if (minRiskNum == riskArray[i]) {
-					throwList[tempArraySize++] = throwList[i];
-				}
-			}
-			throwArraySize = tempArraySize;
-			if (throwArraySize == 1) {
-				int card1 = ((throwList[0] / 9) + 1) * 100 + ((throwList[0] % 9) + 1) * 10;
-				for (int j = 0; j < 4; j++) {
-					int cardId = card1 + j;
-					if (privateHand.findCard(cardId) == true) {
-						result.push_back(cardId);
-						return result;
-					}
-				}
-			}
-		}
-		else*/
+			return false;
+		};
+
+		const int remainTileNumber = board.predictRemainTiles.getRemainTotalTilesNum() - 64 + oppGroup;
 		if (DefenseAnalyze::shouldDefend(board.myPosition, publicHand)) {
 #if (SHOW_INFORMATION && !STDIN)
 			printf(">>> The opponent has two groups of secondary Luda and activates the defensive mode！ <<<\n");
 #endif
-			// 取得安全牌清單
-			std::vector<int> safeCandidates = DefenseAnalyze::getSafeTiles(throwList, throwArraySize, wallTiles);
-
+			std::vector<int> safeCandidates = DefenseAnalyze::getSafeTiles(candidateThrowTiles, candidateThrowCount, wallTiles);
 			if (!safeCandidates.empty()) {
 #if (SHOW_INFORMATION && !STDIN)
 				printf(">>> Find the %zu safety card and let MCTS evaluate the best defensive solution <<<\n", safeCandidates.size());
 #endif
-				throwArraySize = safeCandidates.size();
-				for (int i = 0; i < throwArraySize; ++i) {
-					throwList[i] = safeCandidates[i];
+				candidateThrowCount = (int)safeCandidates.size();
+				for (int candidateIndex = 0; candidateIndex < candidateThrowCount; ++candidateIndex) {
+					candidateThrowTiles[candidateIndex] = safeCandidates[candidateIndex];
 				}
 			}
 		}
-		// ==========================================
-		if (remainNumber <= 16 && board.listenNum > 0) {
+
+		if (remainTileNumber <= 16 && board.listenNum > 0) {
 			vector<int> tileSea = wallTiles.getAllTileSea();
-			for (int i = (int)tileSea.size() - 1; i >= (int)tileSea.size() - 8; --i) {
-				for (int j = 0; j < 4; ++j) {
-					int cardId = tileSea[i] + j;
-					if (privateHand.findCard(cardId) == true) {
-						result.push_back(cardId);
-						return result;
-					}
-				}
-			}
-			int tempArray[17] = { 0 };
-			int tempNumArray[17] = { 0 };
-			//int minRemain = 9999, minTile = -1;
-			int length = board.privateHand.getTileNumArray(tempArray, tempNumArray);
-			int riskArray[17] = { 0 }, minRiskNum = 999;
-			for (int i = 0; i < length; ++i) {
-				if (tempArray[i] / 9 != 3 && tempArray[i] % 9 - 2 >= 0) {
-					if (board.predictRemainTiles.getRemainTilesNum(tempArray[i] - 2) > 0 && board.predictRemainTiles.getRemainTilesNum(tempArray[i] - 1) > 0) {
-						++riskArray[i];
-					}
-				}
-				if (tempArray[i] / 9 != 3 && tempArray[i] % 9 - 1 >= 0 && tempArray[i] % 9 + 1 <= 8) {
-					if (board.predictRemainTiles.getRemainTilesNum(tempArray[i] - 1) && board.predictRemainTiles.getRemainTilesNum(tempArray[i] + 1) > 0) {
-						++riskArray[i];
-					}
-				}
-				if (tempArray[i] / 9 != 3 && tempArray[i] % 9 + 2 <= 8) {
-					if (board.predictRemainTiles.getRemainTilesNum(tempArray[i] + 2) && board.predictRemainTiles.getRemainTilesNum(tempArray[i] + 1)) {
-						++riskArray[i];
-					}
-				}
-				// check pong probability
-				if (board.predictRemainTiles.getRemainTilesNum(tempArray[i]) >= 2) {
-					riskArray[i] += 2;
-				}
-				if (minRiskNum > riskArray[i]) {
-					minRiskNum = riskArray[i];
-				}
-			}
-			int tempArraySize = 0;
-			for (int i = 0; i < length; ++i) {
-				if (minRiskNum == riskArray[i]) {
-					throwList[tempArraySize++] = tempArray[i];
-				}
-			}
-			throwArraySize = tempArraySize;
-			if (throwArraySize == 1) {
-				int card1 = ((throwList[0] / 9) + 1) * 100 + ((throwList[0] % 9) + 1) * 10;
-				for (int j = 0; j < 4; ++j) {
-					int cardId = card1 + j;
-					if (privateHand.findCard(cardId) == true) {
-						result.push_back(cardId);
-						return result;
-					}
-				}
-			}
-			/*for (int i = 0; i < length; i++) {
-				if (minRemain > board.predictRemainTiles.getRemainTilesNum(tempArray[i]) && tempNumArray[i] < 3) {
-					minRemain = board.predictRemainTiles.getRemainTilesNum(tempArray[i]);
-					minTile = tempArray[i];
-				}
-			}
-			if (minTile != -1) {
-				int card1 = ((minTile / 9) + 1) * 100 + ((minTile % 9) + 1) * 10;
-				for (int j = 0; j < 4; j++) {
-					int cardId = card1 + j;
-					if (privateHand.findCard(cardId) == true) {
-						result.push_back(cardId);
-						return result;
-					}
-				}
-			}*/
-		}
-		else if (throwArraySize == 1) {
-			int card1 = ((throwList[0] / 9) + 1) * 100 + ((throwList[0] % 9) + 1) * 10;
-			for (int j = 0; j < 4; ++j) {//有四張卡，一定會找到
-				int cardId = card1 + j;
-				if (privateHand.findCard(cardId) == true) {
-					result.push_back(cardId);
+			for (int seaIndex = (int)tileSea.size() - 1; seaIndex >= (int)tileSea.size() - 8; --seaIndex) {
+				if (tryPickOwnedCard(tileSea[seaIndex])) {
 					return result;
 				}
 			}
-		}
-		else if (throwArraySize > 1) { // for initGame first player
-			int numbers = 0;
-			for (int i = 0; i < throwArraySize; ++i) {
-				if (throwList[i] / 9 == 3) {
-					++numbers;
+
+			int handTileTypes[17] = { 0 };
+			int handTileCounts[17] = { 0 };
+			const int distinctTileCount = board.privateHand.getTileNumArray(handTileTypes, handTileCounts);
+			int riskScoreByTile[17] = { 0 };
+			int minRiskScore = 999;
+			for (int tileIndex = 0; tileIndex < distinctTileCount; ++tileIndex) {
+				if (handTileTypes[tileIndex] / 9 != 3 && handTileTypes[tileIndex] % 9 - 2 >= 0) {
+					if (board.predictRemainTiles.getRemainTilesNum(handTileTypes[tileIndex] - 2) > 0 && board.predictRemainTiles.getRemainTilesNum(handTileTypes[tileIndex] - 1) > 0) {
+						++riskScoreByTile[tileIndex];
+					}
+				}
+				if (handTileTypes[tileIndex] / 9 != 3 && handTileTypes[tileIndex] % 9 - 1 >= 0 && handTileTypes[tileIndex] % 9 + 1 <= 8) {
+					if (board.predictRemainTiles.getRemainTilesNum(handTileTypes[tileIndex] - 1) && board.predictRemainTiles.getRemainTilesNum(handTileTypes[tileIndex] + 1) > 0) {
+						++riskScoreByTile[tileIndex];
+					}
+				}
+				if (handTileTypes[tileIndex] / 9 != 3 && handTileTypes[tileIndex] % 9 + 2 <= 8) {
+					if (board.predictRemainTiles.getRemainTilesNum(handTileTypes[tileIndex] + 2) && board.predictRemainTiles.getRemainTilesNum(handTileTypes[tileIndex] + 1)) {
+						++riskScoreByTile[tileIndex];
+					}
+				}
+				if (board.predictRemainTiles.getRemainTilesNum(handTileTypes[tileIndex]) >= 2) {
+					riskScoreByTile[tileIndex] += 2;
+				}
+				if (minRiskScore > riskScoreByTile[tileIndex]) {
+					minRiskScore = riskScoreByTile[tileIndex];
 				}
 			}
-			if (numbers == throwArraySize) {
-				int filterArray[7] = { 0 }, filterArraySize = 0;
-				for (int j = 0; j < throwArraySize; ++j) {
-					if (throwList[j] != 27 + board.myPosition && throwList[j] < 31) {
-						filterArray[filterArraySize++] = throwList[j];
+
+			int lowRiskCandidateCount = 0;
+			for (int tileIndex = 0; tileIndex < distinctTileCount; ++tileIndex) {
+				if (minRiskScore == riskScoreByTile[tileIndex]) {
+					candidateThrowTiles[lowRiskCandidateCount++] = handTileTypes[tileIndex];
+				}
+			}
+			candidateThrowCount = lowRiskCandidateCount;
+			if (candidateThrowCount == 1 && tryPickOwnedCard(candidateThrowTiles[0])) {
+				return result;
+			}
+		}
+		else if (candidateThrowCount == 1) {
+			if (tryPickOwnedCard(candidateThrowTiles[0])) {
+				return result;
+			}
+		}
+		else if (candidateThrowCount > 1) { /// for initGame first player
+			int honorTileCandidateCount = 0;
+			for (int candidateIndex = 0; candidateIndex < candidateThrowCount; ++candidateIndex) {
+				if (candidateThrowTiles[candidateIndex] / 9 == 3) {
+					++honorTileCandidateCount;
+				}
+			}
+			if (honorTileCandidateCount == candidateThrowCount) {
+				int filteredHonorTiles[7] = { 0 };
+				int filteredHonorCount = 0;
+				for (int candidateIndex = 0; candidateIndex < candidateThrowCount; ++candidateIndex) {
+					if (candidateThrowTiles[candidateIndex] != 27 + board.myPosition && candidateThrowTiles[candidateIndex] < 31) {
+						filteredHonorTiles[filteredHonorCount++] = candidateThrowTiles[candidateIndex];
 					}
 				}
 #ifdef __GNUC__
@@ -1364,26 +1314,21 @@ vector<int> AI::dealThrow() {
 				std::random_device rd;
 				std::mt19937 rng(rd());
 #endif
-				std::uniform_int_distribution<int> uniform_dist(0, (filterArraySize > 0) ? filterArraySize - 1 : throwArraySize - 1);
-				int num = (filterArraySize > 0) ? filterArray[uniform_dist(rng)] : throwList[uniform_dist(rng)];
-				int card1 = ((num / 9) + 1) * 100 + ((num % 9) + 1) * 10;
-				for (int j = 0; j < 4; ++j) {
-					int cardId = card1 + j;
-					if (privateHand.findCard(cardId) == true) {
-						result.push_back(cardId);
-						return result;
-					}
+				std::uniform_int_distribution<int> uniform_dist(0, (filteredHonorCount > 0) ? filteredHonorCount - 1 : candidateThrowCount - 1);
+				const int chosenTile = (filteredHonorCount > 0) ? filteredHonorTiles[uniform_dist(rng)] : candidateThrowTiles[uniform_dist(rng)];
+				if (tryPickOwnedCard(chosenTile)) {
+					return result;
 				}
 			}
 		}
+
 #if (CLOSE_MCS == 0)
 		clock_t totalStart = clock();
-		MCTS(board, throwList, throwArraySize);
+		MCTS(board, candidateThrowTiles, candidateThrowCount);
 		totalDuration = (double)(clock() - totalStart) * 1000 / CLOCKS_PER_SEC;
 
 #ifdef LOG_TIME_AND_TREESIZE
 		{
-			// Log time and treeSize, with remainTilesTotal
 			std::string fileName = "timeLog" + std::to_string(getID()) + ".csv";
 			std::ofstream timeLog(fileName, std::ios::app);
 			timeLog << board.predictRemainTiles.getRemainTotalTilesNum() << "," << totalDuration << "\n";
@@ -1396,138 +1341,137 @@ vector<int> AI::dealThrow() {
 		}
 #endif
 #endif
-		if (throwArraySize > 0) {
+		if (candidateThrowCount > 0) {
 			int winRateIndexArray[17] = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 ,11, 12, 13, 14, 15, 16 };
-			QuickSort(winRateIndexArray, 0, nodes[0].childrenNum - 1); /// 將children依照勝率(average)排序
+			QuickSort(winRateIndexArray, 0, nodes[0].childrenNum - 1); /// 將 children 依照勝率(average)排序
 
-			for (int i = 0; i < throwArraySize; i++) std::cout << throwList[winRateIndexArray[i]] << " "; // Debug
+			for (int candidateIndex = 0; candidateIndex < candidateThrowCount; ++candidateIndex) {
+				std::cout << candidateThrowTiles[winRateIndexArray[candidateIndex]] << " "; // Debug
+			}
 			std::cout << "\n"; // Debug
-			for (int i = 0; i < nodes[0].childrenNum; i++) std::cout << nodes[nodes[0].childIndex[winRateIndexArray[i]]].averageScore << " "; // Debug
+			for (int candidateIndex = 0; candidateIndex < nodes[0].childrenNum; ++candidateIndex) {
+				std::cout << nodes[nodes[0].childIndex[winRateIndexArray[candidateIndex]]].averageScore << " "; // Debug
+			}
 			std::cout << "\n"; // Debug
 
-			int maxValid = 0; /// 有效牌種數
-			int maxValidArray[17] = { winRateIndexArray[0] }, maxValidArraySize = 1;
-			table->UpdateTableID(board.tableID, throwList[winRateIndexArray[0]], THROW); /// 丟棄勝率最高的牌
-			for (int i = 0; i < 3; ++i) { /// 數牌
-				if (board.tableID[i] != 0) { /// 試試每種牌，如果場上還有該牌且得到該牌會降低進聽數，則maxValid++
-					for (int b = i * 9; b < i * 9 + 9; ++b) {
-						if (board.predictRemainTiles.getRemainTilesNum(b) > 0) {
-							table->UpdateTableID(board.tableID, b, TAKE);
+			int bestImprovementCount = 0; /// 有效牌種數
+			int bestImprovementIndices[17] = { winRateIndexArray[0] };
+			int bestImprovementIndexCount = 1;
+			table->UpdateTableID(board.tableID, candidateThrowTiles[winRateIndexArray[0]], THROW); /// 丟棄勝率最高的牌，觀察剩餘進張
+			for (int suitIndex = 0; suitIndex < 3; ++suitIndex) {
+				if (board.tableID[suitIndex] != 0) {
+					for (int tileIndex = suitIndex * 9; tileIndex < suitIndex * 9 + 9; ++tileIndex) {
+						if (board.predictRemainTiles.getRemainTilesNum(tileIndex) > 0) {
+							table->UpdateTableID(board.tableID, tileIndex, TAKE);
 							if (board.listenNum > table->getTilesListenNum(5 - board.publicGroupNum, board.tableID, board.is_have_eyes)) {
-								++maxValid;
+								++bestImprovementCount;
 							}
-							table->UpdateTableID(board.tableID, b, THROW);
+							table->UpdateTableID(board.tableID, tileIndex, THROW);
 						}
 					}
 				}
 			}
-			if (board.tableID[3] != 0) { /// 字牌
-				for (int b = 27; b < 34; ++b) {
-					if (board.predictRemainTiles.getRemainTilesNum(b) > 0) {
-						table->UpdateTableID(board.tableID, b, TAKE);
+			if (board.tableID[3] != 0) {
+				for (int tileIndex = 27; tileIndex < 34; ++tileIndex) {
+					if (board.predictRemainTiles.getRemainTilesNum(tileIndex) > 0) {
+						table->UpdateTableID(board.tableID, tileIndex, TAKE);
 						if (board.listenNum > table->getTilesListenNum(5 - board.publicGroupNum, board.tableID, board.is_have_eyes)) {
-							++maxValid;
+							++bestImprovementCount;
 						}
-						table->UpdateTableID(board.tableID, b, THROW);
+						table->UpdateTableID(board.tableID, tileIndex, THROW);
 					}
 				}
 			}
-			//maxValid = table->getValidTiles(board.tableID, board.predictRemainTiles, board.is_have_eyes);
-			table->UpdateTableID(board.tableID, throwList[winRateIndexArray[0]], TAKE);
-			record = winRateIndexArray[0];
+			table->UpdateTableID(board.tableID, candidateThrowTiles[winRateIndexArray[0]], TAKE);
+			bestThrowIndex = winRateIndexArray[0];
 
-			for (int a = 1; a < nodes[0].childrenNum; ++a) {
-				if (nodes[nodes[0].childIndex[winRateIndexArray[0]]].averageScore - nodes[nodes[0].childIndex[winRateIndexArray[a]]].averageScore <= 0.015) {
-					table->UpdateTableID(board.tableID, throwList[winRateIndexArray[a]], THROW);
-					int validNum = 0;
-					for (int i = 0; i < 3; ++i) {
-						if (board.tableID[i] != 0) {
-							for (int b = i * 9; b < i * 9 + 9; ++b) {
-								if (board.predictRemainTiles.getRemainTilesNum(b) > 0) {
-									table->UpdateTableID(board.tableID, b, TAKE);
+			for (int candidateRank = 1; candidateRank < nodes[0].childrenNum; ++candidateRank) {
+				if (nodes[nodes[0].childIndex[winRateIndexArray[0]]].averageScore - nodes[nodes[0].childIndex[winRateIndexArray[candidateRank]]].averageScore <= 0.015) {
+					table->UpdateTableID(board.tableID, candidateThrowTiles[winRateIndexArray[candidateRank]], THROW);
+					int improvementCount = 0;
+					for (int suitIndex = 0; suitIndex < 3; ++suitIndex) {
+						if (board.tableID[suitIndex] != 0) {
+							for (int tileIndex = suitIndex * 9; tileIndex < suitIndex * 9 + 9; ++tileIndex) {
+								if (board.predictRemainTiles.getRemainTilesNum(tileIndex) > 0) {
+									table->UpdateTableID(board.tableID, tileIndex, TAKE);
 									if (board.listenNum > table->getTilesListenNum(5 - board.publicGroupNum, board.tableID, board.is_have_eyes)) {
-										++validNum;
+										++improvementCount;
 									}
-									table->UpdateTableID(board.tableID, b, THROW);
+									table->UpdateTableID(board.tableID, tileIndex, THROW);
 								}
 							}
 						}
 					}
 					if (board.tableID[3] != 0) {
-						for (int b = 27; b < 34; ++b) {
-							if (board.predictRemainTiles.getRemainTilesNum(b) > 0) {
-								table->UpdateTableID(board.tableID, b, TAKE);
+						for (int tileIndex = 27; tileIndex < 34; ++tileIndex) {
+							if (board.predictRemainTiles.getRemainTilesNum(tileIndex) > 0) {
+								table->UpdateTableID(board.tableID, tileIndex, TAKE);
 								if (board.listenNum > table->getTilesListenNum(5 - board.publicGroupNum, board.tableID, board.is_have_eyes)) {
-									++validNum;
+									++improvementCount;
 								}
-								table->UpdateTableID(board.tableID, b, THROW);
+								table->UpdateTableID(board.tableID, tileIndex, THROW);
 							}
 						}
 					}
-					if (maxValid < validNum) {
-						maxValid = validNum;
-						record = winRateIndexArray[a];
-						maxValidArray[0] = winRateIndexArray[a];
-						maxValidArraySize = 1;
+					if (bestImprovementCount < improvementCount) {
+						bestImprovementCount = improvementCount;
+						bestThrowIndex = winRateIndexArray[candidateRank];
+						bestImprovementIndices[0] = winRateIndexArray[candidateRank];
+						bestImprovementIndexCount = 1;
 					}
-					else if (maxValid == validNum) {
-						maxValidArray[maxValidArraySize++] = winRateIndexArray[a];
+					else if (bestImprovementCount == improvementCount) {
+						bestImprovementIndices[bestImprovementIndexCount++] = winRateIndexArray[candidateRank];
 					}
-					table->UpdateTableID(board.tableID, throwList[winRateIndexArray[a]], TAKE);
+					table->UpdateTableID(board.tableID, candidateThrowTiles[winRateIndexArray[candidateRank]], TAKE);
 				}
 				else {
 					break;
 				}
 			}
 
-			if (maxValidArraySize >= 2) {
-				int max_appear_num = wallTiles.getTileSeaTileNum(throwList[maxValidArray[0]]), min_second_comparison_num = 0;
-				if (throwList[maxValidArray[0]] % 9 != 0) {
-					min_second_comparison_num += 4 - wallTiles.getTileSeaTileNum(throwList[maxValidArray[0]] - 1);
+			if (bestImprovementIndexCount >= 2) {
+				int maxAppearNum = wallTiles.getTileSeaTileNum(candidateThrowTiles[bestImprovementIndices[0]]);
+				int minNeighborDanger = 0;
+				if (candidateThrowTiles[bestImprovementIndices[0]] % 9 != 0) {
+					minNeighborDanger += 4 - wallTiles.getTileSeaTileNum(candidateThrowTiles[bestImprovementIndices[0]] - 1);
 				}
-				if (throwList[winRateIndexArray[0]] % 9 != 8) {
-					min_second_comparison_num += 4 - wallTiles.getTileSeaTileNum(throwList[maxValidArray[0]] + 1);
+				if (candidateThrowTiles[winRateIndexArray[0]] % 9 != 8) {
+					minNeighborDanger += 4 - wallTiles.getTileSeaTileNum(candidateThrowTiles[bestImprovementIndices[0]] + 1);
 				}
-				for (int i = 0; i < maxValidArraySize; ++i) {
-					int appear_number = wallTiles.getTileSeaTileNum(throwList[maxValidArray[i]]), second_comparison_num = 0;
-					if (throwList[maxValidArray[i]] % 9 != 0) {
-						second_comparison_num += 4 - wallTiles.getTileSeaTileNum(throwList[maxValidArray[i]] - 1);
+				for (int candidateIndex = 0; candidateIndex < bestImprovementIndexCount; ++candidateIndex) {
+					int appearNumber = wallTiles.getTileSeaTileNum(candidateThrowTiles[bestImprovementIndices[candidateIndex]]);
+					int neighborDanger = 0;
+					if (candidateThrowTiles[bestImprovementIndices[candidateIndex]] % 9 != 0) {
+						neighborDanger += 4 - wallTiles.getTileSeaTileNum(candidateThrowTiles[bestImprovementIndices[candidateIndex]] - 1);
 					}
-					if (throwList[maxValidArray[i]] % 9 != 8) {
-						second_comparison_num += 4 - wallTiles.getTileSeaTileNum(throwList[maxValidArray[i]] + 1);
+					if (candidateThrowTiles[bestImprovementIndices[candidateIndex]] % 9 != 8) {
+						neighborDanger += 4 - wallTiles.getTileSeaTileNum(candidateThrowTiles[bestImprovementIndices[candidateIndex]] + 1);
 					}
-					if (max_appear_num < appear_number || (max_appear_num == appear_number && min_second_comparison_num > second_comparison_num)) {
-						min_second_comparison_num = second_comparison_num;
-						max_appear_num = appear_number;
-						record = maxValidArray[i];
+					if (maxAppearNum < appearNumber || (maxAppearNum == appearNumber && minNeighborDanger > neighborDanger)) {
+						minNeighborDanger = neighborDanger;
+						maxAppearNum = appearNumber;
+						bestThrowIndex = bestImprovementIndices[candidateIndex];
 					}
 				}
 			}
 
 #if (SHOW_WIN_RATE && !STDIN)
-			double  max = -99999.9;
-			for (int a = 0; a < nodes[0].Nchild; ++a) { // pick move
-				//printf("%d / %d, %lf, %lf\n", nodes[nodes[0].c_id[a]].sum1, nodes[nodes[0].c_id[a]].Ntotal, nodes[nodes[0].c_id[a]].average , nodes[nodes[0].c_id[a]].variance); // Modified(no comment)
-				printf("%d / %d, %lf\n", nodes[nodes[0].c_id[a]].sum1, nodes[nodes[0].c_id[a]].Ntotal, nodes[nodes[0].c_id[a]].average); // Modified
+			double max = -99999.9;
+			for (int candidateIndex = 0; candidateIndex < nodes[0].Nchild; ++candidateIndex) { // pick move
+				printf("%d / %d, %lf\n", nodes[nodes[0].c_id[candidateIndex]].sum1, nodes[nodes[0].c_id[candidateIndex]].Ntotal, nodes[nodes[0].c_id[candidateIndex]].average); // Modified
 			}
 #endif
-			int card1 = ((throwList[record] / 9) + 1) * 100 + ((throwList[record] % 9) + 1) * 10;
+			const int chosenTile = candidateThrowTiles[bestThrowIndex];
 			memset(&nodes, 0, sizeof(nodes));
-			for (int j = 0; j < 4; ++j) {
-				int cardId = card1 + j;
-				if (privateHand.findCard(cardId) == true) {
-					result.push_back(cardId);
-					//std::cout << "Choice: " << cardId << "\n"; // Debug
-					//system("pause"); // Debug
-					return result;
-				}
+			if (tryPickOwnedCard(chosenTile)) {
+				return result;
 			}
 
-			for (int i = 0; i < throwArraySize; ++i) {
-				printf("%d ", throwList[i]);
+			for (int candidateIndex = 0; candidateIndex < candidateThrowCount; ++candidateIndex) {
+				printf("%d ", candidateThrowTiles[candidateIndex]);
 			}
-			printf("record : %d\n", record);
-			printf("*** Can't find MCTS tiles! Tile : %d ***\n", card1);
+			printf("record : %d\n", bestThrowIndex);
+			printf("*** Can't find MCTS tiles! Tile : %d ***\n", TileIndexToCardBaseId(chosenTile));
 			std::cout << "linr 1483\n"; // Debug
 			return input(1, false);
 		}
@@ -1536,8 +1480,10 @@ vector<int> AI::dealThrow() {
 		}
 	}
 	else { // Random AI player
-		vector<int> temp = privateHand.getTiles();
-		if (temp.size() <= 0) fprintf(stderr, "Random Empty.\n");
+		vector<int> handCardIds = privateHand.getTiles();
+		if (handCardIds.size() <= 0) {
+			fprintf(stderr, "Random Empty.\n");
+		}
 #ifdef __GNUC__
 		pcg_extras::seed_seq_from<std::random_device> seed_source;
 		pcg32 rng(seed_source);
@@ -1545,60 +1491,61 @@ vector<int> AI::dealThrow() {
 		std::random_device rd;
 		std::mt19937 rng(rd());
 #endif
-		std::uniform_int_distribution<int> uniform_dist(0, temp.size() - 1);
-		int num = temp[uniform_dist(rng)];
-		result.push_back(num);
+		std::uniform_int_distribution<int> uniform_dist(0, static_cast<int>(handCardIds.size()) - 1);
+		const int chosenCardId = handCardIds[uniform_dist(rng)];
+		result.push_back(chosenCardId);
 	}
 	return result;
 }
 
-vector<int> AI::input(const int& Input_num, const bool& Pass) {
-	int input;
-	vector<int> temp;
+vector<int> AI::input(const int& inputCount, const bool& allowPass) {
+	int selectedCardId = 0;
+	vector<int> selectedCards;
 	privateHand.ShowPrivateHand();
-	for (int i = 0; i < Input_num; ++i) {
-		scanf("%d\n", &input);
-		if (input == -1 && Pass) {
-			temp.clear();
-			return temp;
+	for (int inputIndex = 0; inputIndex < inputCount; ++inputIndex) {
+		scanf("%d\n", &selectedCardId);
+		if (selectedCardId == -1 && allowPass) {
+			selectedCards.clear();
+			return selectedCards;
 		}
-		else if (!privateHand.findCard(input)) {
-			i = -1;
-			temp.clear();
+		else if (!privateHand.findCard(selectedCardId)) {
+			inputIndex = -1;
+			selectedCards.clear();
 			fprintf(stderr, "Wrong Card\n");
 			continue;
 		}
-		temp.push_back(input);
+		selectedCards.push_back(selectedCardId);
 	}
-	return temp;
+	return selectedCards;
 }
 
-inline void AI::DealTake(const int& takeTile) {
-	board.takeTile = (takeTile / 100 - 1) * 9 + (takeTile / 10 % 10 - 1);
+inline void AI::DealTake(const int& takenCardId) {
+	board.takeTile = CardIdToTileIndex(takenCardId);
 	board.privateHand.AddHand(board.takeTile, hashKey); // Modified, not privatehand in Player.cpp
 	table->UpdateTableID(board.tableID, board.takeTile, TAKE);
 	board.listenNum = table->getTilesListenNum(5 - publicHand[board.myPosition].getGroupNum(), board.tableID, board.is_have_eyes);
 }
 
-inline void AI::DealRemainTiles(const int& card) {
-	int num = (card / 100 - 1) * 9 + (card / 10 % 10 - 1);
-	this->board.predictRemainTiles.AddCard(num); /// 把牌加到已經出現的牌集合中
+inline void AI::DealRemainTiles(const int& appearedCardId) {
+	const int tileIndex = CardIdToTileIndex(appearedCardId);
+	this->board.predictRemainTiles.AddCard(tileIndex); /// 把牌加到已經出現的牌集合中
 }
 
 inline void AI::MoveThrow(const vector<int>& throwTile) {
 	if (mode == 0) { /// AI mode
 		if (!throwTile.empty()) {
-			for (unsigned i = 0; i < throwTile.size(); ++i) {
-				int tile = (throwTile[i] / 100 - 1) * 9 + (throwTile[i] / 10 % 10 - 1);
-				board.throwTile = tile;
+			for (unsigned thrownIndex = 0; thrownIndex < throwTile.size(); ++thrownIndex) {
+				const int tileIndex = CardIdToTileIndex(throwTile[thrownIndex]);
+				board.throwTile = tileIndex;
 				board.privateHand.RemoveHand(board.throwTile, hashKey); // Modified
 				table->UpdateTableID(board.tableID, board.throwTile, THROW);
 			}
 		}
 		else {
-			int tempArray[17] = { 0 }, tempNumArray[17] = { 0 };
-			int length = board.privateHand.getTileNumArray(tempArray, tempNumArray);
-			table->UpdateTableID(tempArray, tempNumArray, length, board.tableID);
+			int handTileTypes[17] = { 0 };
+			int handTileCounts[17] = { 0 };
+			const int distinctTileCount = board.privateHand.getTileNumArray(handTileTypes, handTileCounts);
+			table->UpdateTableID(handTileTypes, handTileCounts, distinctTileCount, board.tableID);
 		}
 		if (throwTile.size() > 1) {
 			board.publicGroupNum++;
@@ -1608,66 +1555,68 @@ inline void AI::MoveThrow(const vector<int>& throwTile) {
 }
 
 inline void AI::MakeTake(Board& b, const int& player, const int& action) {
-	int card1 = (action >> 3) & 63, code = action & 7;
+	/// action 的高位元會帶要操作的牌，低 3 bit 則是 TAKE / EAT / PONG / GONG 類型。
+	const int primaryTile = (action >> 3) & 63;
+	const int actionCode = action & 7;
 
-	switch (code) {
+	switch (actionCode) {
 	case TAKE: {
-		int cards = b.predictRemainTiles.TakeTile();
-		b.takeTile = cards;
-		b.privateHand.AddHand(cards, hashKey); // Modified
-		table->UpdateTableID(b.tableID, cards, TAKE);
+		const int drawnTile = b.predictRemainTiles.TakeTile();
+		b.takeTile = drawnTile;
+		b.privateHand.AddHand(drawnTile, hashKey); // Modified
+		table->UpdateTableID(b.tableID, drawnTile, TAKE);
 		break;
 	}
 	case EAT: {
-		int card2 = action >> 12;
-		b.takeTile = card1;
+		const int secondaryTile = action >> 12;
+		b.takeTile = primaryTile;
 		b.publicGroupNum++;
-		b.privateHand.RemoveHand(card1, hashKey); // Modified
-		b.privateHand.RemoveHand(card2, hashKey); // Modified
-		table->UpdateTableID(b.tableID, card1, THROW);
-		table->UpdateTableID(b.tableID, card2, THROW);
+		b.privateHand.RemoveHand(primaryTile, hashKey); // Modified
+		b.privateHand.RemoveHand(secondaryTile, hashKey); // Modified
+		table->UpdateTableID(b.tableID, primaryTile, THROW);
+		table->UpdateTableID(b.tableID, secondaryTile, THROW);
 		break;
 	}
 	case PONG: {
-		b.takeTile = card1;
+		b.takeTile = primaryTile;
 		b.publicGroupNum++;
-		b.privateHand.RemoveHand(card1, hashKey); // Modified
-		b.privateHand.RemoveHand(card1, hashKey); // Modified
-		table->UpdateTableID(b.tableID, card1, THROW);
-		table->UpdateTableID(b.tableID, card1, THROW);
+		b.privateHand.RemoveHand(primaryTile, hashKey); // Modified
+		b.privateHand.RemoveHand(primaryTile, hashKey); // Modified
+		table->UpdateTableID(b.tableID, primaryTile, THROW);
+		table->UpdateTableID(b.tableID, primaryTile, THROW);
 		break;
 	}
 	case MING_GONG: {
 		b.takeTile = -1;
 		b.publicGroupNum++;
-		for (int i = 0; i < 3; ++i) {
-			b.privateHand.RemoveHand(card1, hashKey); // Modified
-			table->UpdateTableID(b.tableID, card1, THROW);
+		for (int removeIndex = 0; removeIndex < 3; ++removeIndex) {
+			b.privateHand.RemoveHand(primaryTile, hashKey); // Modified
+			table->UpdateTableID(b.tableID, primaryTile, THROW);
 		}
-		int cards = b.predictRemainTiles.TakeTile();
-		b.privateHand.AddHand(cards, hashKey); // Modified
-		table->UpdateTableID(b.tableID, cards, TAKE);
+		const int replacementTile = b.predictRemainTiles.TakeTile();
+		b.privateHand.AddHand(replacementTile, hashKey); // Modified
+		table->UpdateTableID(b.tableID, replacementTile, TAKE);
 		break;
 	}
 	case DARK_GONG: {
 		b.takeTile = -1;
 		b.publicGroupNum++;
-		for (int i = 0; i < 4; ++i) {
-			b.privateHand.RemoveHand(card1, hashKey); // Modified
-			table->UpdateTableID(b.tableID, card1, THROW);
+		for (int removeIndex = 0; removeIndex < 4; ++removeIndex) {
+			b.privateHand.RemoveHand(primaryTile, hashKey); // Modified
+			table->UpdateTableID(b.tableID, primaryTile, THROW);
 		}
-		int cards = b.predictRemainTiles.TakeTile();
-		b.privateHand.AddHand(cards, hashKey); // Modified
-		table->UpdateTableID(b.tableID, cards, TAKE);
+		const int replacementTile = b.predictRemainTiles.TakeTile();
+		b.privateHand.AddHand(replacementTile, hashKey); // Modified
+		table->UpdateTableID(b.tableID, replacementTile, TAKE);
 		break;
 	}
 	case BU_GONG: {
 		b.takeTile = -1;
-		b.privateHand.RemoveHand(card1, hashKey); // Modified
-		table->UpdateTableID(b.tableID, card1, THROW);
-		int cards = b.predictRemainTiles.TakeTile();
-		b.privateHand.AddHand(cards, hashKey); // Modified
-		table->UpdateTableID(b.tableID, cards, TAKE);
+		b.privateHand.RemoveHand(primaryTile, hashKey); // Modified
+		table->UpdateTableID(b.tableID, primaryTile, THROW);
+		const int replacementTile = b.predictRemainTiles.TakeTile();
+		b.privateHand.AddHand(replacementTile, hashKey); // Modified
+		table->UpdateTableID(b.tableID, replacementTile, TAKE);
 		break;
 	}
 	default:
@@ -1683,6 +1632,7 @@ inline void AI::MakeTake(Board& b, const int& player, const int& action) {
 }
 
 inline void AI::MakeThrow(Board& b, const int& card, const bool& real) {
+	(void)real;
 	if (b.status == b.myPosition) {
 		b.throwTile = card;
 		b.privateHand.RemoveHand(card); // Modified
@@ -1692,6 +1642,7 @@ inline void AI::MakeThrow(Board& b, const int& card, const bool& real) {
 }
 
 inline void AI::UpdateStatus(Board& b) {
+	/// status 只代表「現在輪到哪位玩家」，照座位順序往下移一位即可。
 	switch (b.status) {
 	case OnePlay:
 		b.status = TwoPlay;
@@ -1734,7 +1685,6 @@ void AI::ShowFunctionTime() { // Modified(no comment)
 	printf("Throw Time : %lf\n", throwTime / times);
 	printf("MCTS Time : %lf\n", MCTS_Time / times);*/
 }
-
 //-----------------------------  MCTS  ------------------------------------
 
 inline int AI::Simulate(const Board& a, const int& throwCard) {
@@ -2628,39 +2578,45 @@ double AI::UCB(const int& nodeIndex, const std::atomic<int>& treeSimTimes) {
 }
 
 void AI::backwardPropagation(const int& startIndex, const double& newAvg, const int& newSimTimes) {
-	int ptr = startIndex;
-	while (ptr != 0) {
-		int originalSimTimes = nodes[ptr].totalSimTimes;
-		nodes[ptr].totalSimTimes += newSimTimes;
-		nodes[ptr].averageScore = (newSimTimes * newAvg) + (originalSimTimes * nodes[ptr].averageScore);
-		nodes[ptr].averageScore /= nodes[ptr].totalSimTimes;
-		ptr = nodes[ptr].parentIndex;
+	int currentNodeIndex = startIndex;
+	while (currentNodeIndex != 0) {
+		const int originalSimTimes = nodes[currentNodeIndex].totalSimTimes;
+		nodes[currentNodeIndex].totalSimTimes += newSimTimes;
+		nodes[currentNodeIndex].averageScore = (newSimTimes * newAvg) + (originalSimTimes * nodes[currentNodeIndex].averageScore);
+		nodes[currentNodeIndex].averageScore /= nodes[currentNodeIndex].totalSimTimes;
+		currentNodeIndex = nodes[currentNodeIndex].parentIndex;
 	}
 }
 
 inline void AI::MCTS(const Board& currentBoard, const int* throwList, const int& throwListSize) {
-	//while (true) { // Debug
-		//std::cout << "new round\n"; // Debug
-		//for (int i = 0; i < TT_SIZE; i++) tt[i].simNum = 0; // Debug
-		// Check if throwList is empty or not
-	if (throwListSize == 0) throw std::invalid_argument("In MCTS: ThrowList of current board is empty,\n");
+	/// MCTS 只負責比較「目前這手牌丟哪一種牌比較好」，流程分成：
+	/// 1. 建立根節點與第一層捨牌節點
+	/// 2. 用 UCB 在樹上往下選葉節點
+	/// 3. 展開可能摸進的牌，再接續模擬
+	/// 4. 把估計分數往上回傳
+	if (throwListSize == 0) {
+		throw std::invalid_argument("In MCTS: ThrowList of current board is empty,\n");
+	}
 
-	unsigned int treeSimTimes = 0;
+	unsigned int totalTreeSimTimes = 0;
 
-	// For TT
-	boost::multiprecision::uint256_t queryKey; // Modified
-	unsigned int hashIndex; // Modified
-	short specificTileNum;
-#ifdef LOG_COLLISION // Modified
-	unsigned int hitNum = 0, clsNum = 0;  // Modified
+	// Transposition table 相關資料：相同牌姿可以直接重用之前的模擬結果。
+	boost::multiprecision::uint256_t queryKey;
+	unsigned int hashIndex;
+	short tileCountInHand;
+#ifdef LOG_COLLISION
+	unsigned int ttHitCount = 0, ttCollisionCount = 0;
 #endif
 
-	// Maintain throwIndex table: thrownTile[throwntile] = index in throwList
-	int thrownTileToIndex[34] = { -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1 };
-	for (int i = 0; i < throwListSize; i++)
-		thrownTileToIndex[throwList[i]] = i;
+	int rootChildIndexByTile[kTileTypeCount];
+	for (int tileIndex = 0; tileIndex < kTileTypeCount; ++tileIndex) {
+		rootChildIndexByTile[tileIndex] = -1;
+	}
+	for (int candidateIndex = 0; candidateIndex < throwListSize; ++candidateIndex) {
+		rootChildIndexByTile[throwList[candidateIndex]] = candidateIndex;
+	}
 
-	// Initialize root: nodes[0]
+	// 初始化根節點：根節點本身不代表任何丟牌，只拿來掛第一層候選。
 	nodes[0].averageScore = 0;
 	nodes[0].childrenNum = throwListSize;
 	nodes[0].depth = 0;
@@ -2670,284 +2626,285 @@ inline void AI::MCTS(const Board& currentBoard, const int* throwList, const int&
 	nodes[0].throwTile = -1;
 	nodes[0].totalSimTimes = 0;
 
-	// First-layer expansion, simulation, and backward propagation
-	for (int i = 0; i < throwListSize; i++) {
-		// Initialize nodes[1 + i]
-		nodes[0].childIndex[i] = i + 1;
-		nodes[i + 1].averageScore = 0;
-		nodes[i + 1].childrenNum = 0;
-		nodes[i + 1].depth = 1;
-		nodes[i + 1].drawnTile = -1;
-		nodes[i + 1].isTerminateNode = false;
-		nodes[i + 1].parentIndex = 0;
-		nodes[i + 1].throwTile = throwList[i];
-		nodes[i + 1].totalSimTimes = 0;
+	// 第一層：每個候選捨牌都先做一輪完整模擬，當作 MCTS 的起始分數。
+	for (int candidateIndex = 0; candidateIndex < throwListSize; ++candidateIndex) {
+		const int nodeIndex = candidateIndex + 1;
+		nodes[0].childIndex[candidateIndex] = nodeIndex;
+		nodes[nodeIndex].averageScore = 0;
+		nodes[nodeIndex].childrenNum = 0;
+		nodes[nodeIndex].depth = 1;
+		nodes[nodeIndex].drawnTile = -1;
+		nodes[nodeIndex].isTerminateNode = false;
+		nodes[nodeIndex].parentIndex = 0;
+		nodes[nodeIndex].throwTile = throwList[candidateIndex];
+		nodes[nodeIndex].totalSimTimes = 0;
 
-		// Genrate the key that represent the board without throwList[i]
-		specificTileNum = currentBoard.privateHand.getTileNum(throwList[i]); // Modified
-		queryKey = hashKey ^ tileNumHash[(throwList[i] << 2) + specificTileNum - 1]; // Modified
-		if (specificTileNum > 1) queryKey ^= tileNumHash[(throwList[i] << 2) + specificTileNum - 2]; // Modified
-		hashIndex = (unsigned int)(queryKey & mask);
-		if (tt[hashIndex].simNum >= SIMULATION_NUM && tt[hashIndex].key == queryKey) { // Hit
-#ifdef LOG_COLLISION
-			hitNum++; // Modified
-#endif
-			nodes[i + 1].totalSimTimes = tt[hashIndex].simNum; // Modified
-			nodes[i + 1].averageScore = (double)tt[hashIndex].simScore / tt[hashIndex].simNum; // Modified
-
-			treeSimTimes += tt[hashIndex].simNum; // Modified
+		tileCountInHand = currentBoard.privateHand.getTileNum(throwList[candidateIndex]);
+		queryKey = hashKey ^ tileNumHash[(throwList[candidateIndex] << 2) + tileCountInHand - 1];
+		if (tileCountInHand > 1) {
+			queryKey ^= tileNumHash[(throwList[candidateIndex] << 2) + tileCountInHand - 2];
 		}
-		else { // Modified
-			if (tt[hashIndex].simNum > 0 && tt[hashIndex].key != queryKey) { // Modified
+		hashIndex = (unsigned int)(queryKey & mask);
+		if (tt[hashIndex].simNum >= SIMULATION_NUM && tt[hashIndex].key == queryKey) {
 #ifdef LOG_COLLISION
-				hitNum++; // Modifed 
-				clsNum++; // Modified
+			++ttHitCount;
+#endif
+			nodes[nodeIndex].totalSimTimes = tt[hashIndex].simNum;
+			nodes[nodeIndex].averageScore = (double)tt[hashIndex].simScore / tt[hashIndex].simNum;
+			totalTreeSimTimes += tt[hashIndex].simNum;
+		}
+		else {
+			if (tt[hashIndex].simNum > 0 && tt[hashIndex].key != queryKey) {
+#ifdef LOG_COLLISION
+				++ttHitCount;
+				++ttCollisionCount;
 #endif
 			}
 
-			// Simulation
-			std::atomic<int> nodeScores = 0, nodeSimTimes = 0;
-			pool.parallelize_loop(0, SIMULATION_NUM, [this, &currentBoard, &throwList, &i, &nodeScores, &nodeSimTimes, &queryKey](const int& q, const int& w) {
-				for (int a = q; a < w; ++a) {
-					nodeScores += Simulate(currentBoard, throwList[i]);
+			std::atomic<int> nodeScoreSum = 0;
+			std::atomic<int> nodeSimTimes = 0;
+			pool.parallelize_loop(0, SIMULATION_NUM, [this, &currentBoard, &throwList, &candidateIndex, &nodeScoreSum, &nodeSimTimes](const int& beginIndex, const int& endIndex) {
+				for (int rolloutIndex = beginIndex; rolloutIndex < endIndex; ++rolloutIndex) {
+					nodeScoreSum += Simulate(currentBoard, throwList[candidateIndex]);
 					nodeSimTimes++;
 				}
 				});
 
-			// Upadate first-depth node
-			nodes[i + 1].totalSimTimes += nodeSimTimes;
-			nodes[i + 1].averageScore = (double)nodeScores / nodeSimTimes;
+			nodes[nodeIndex].totalSimTimes += nodeSimTimes;
+			nodes[nodeIndex].averageScore = (double)nodeScoreSum / nodeSimTimes;
+			totalTreeSimTimes += nodeSimTimes;
 
-			treeSimTimes += nodeSimTimes;
-
-			// Update tt
-			unsigned long long hashIndex = (unsigned long long)(queryKey & mask); // Modified
-			if (tt[hashIndex].simNum == 0) {
-				tt[hashIndex].key = queryKey; // Modified
-				tt[hashIndex].simNum = nodeSimTimes; // Modified
-				tt[hashIndex].simScore = nodeScores; // Modified
+			unsigned long long ttIndex = (unsigned long long)(queryKey & mask);
+			if (tt[ttIndex].simNum == 0) {
+				tt[ttIndex].key = queryKey;
+				tt[ttIndex].simNum = nodeSimTimes;
+				tt[ttIndex].simScore = nodeScoreSum;
 			}
-			else if (tt[hashIndex].key == queryKey) {
-				tt[hashIndex].simNum += nodeSimTimes; // Modified
-				tt[hashIndex].simScore += nodeScores; // Modified
+			else if (tt[ttIndex].key == queryKey) {
+				tt[ttIndex].simNum += nodeSimTimes;
+				tt[ttIndex].simScore += nodeScoreSum;
 			}
 		}
 	}
-	// Generalize the other layers
-	int nodesSize = throwListSize + 1; // Current number of elements of nodes[]
-	short int selectionCnt = 1; // Count the number of repeated selections
 
-	boost::multiprecision::uint256_t maxLeafKey, drawLayerKey; // Modified
-	while (selectionCnt++ < SELECTION_NUM) {
-		// Selection: Select the path based on UCB
-		int ptr = 0; // Index of root (Selection starts from root)
+	int nodeCount = throwListSize + 1;
+	short int selectionRound = 1;
 
-		Board maxLeaf = currentBoard;
-		maxLeaf.status = currentBoard.myPosition;
-		maxLeafKey = hashKey; // Modified
-		int maxLeafIndex = -1;
-		while (nodes[ptr].childrenNum > 0) { // Trace to leaf node
-			double maxUCB = -1;
-			for (int i = 0; i < nodes[ptr].childrenNum; i++) {
-				double nodeUCB = UCB(nodes[ptr].childIndex[i], treeSimTimes);
-				if (nodeUCB > maxUCB) {
-					maxUCB = nodeUCB;
-					maxLeafIndex = nodes[ptr].childIndex[i];
+	boost::multiprecision::uint256_t selectedLeafKey, postDrawKey;
+	while (selectionRound++ < SELECTION_NUM) {
+		// Selection: 從根節點開始，用 UCB 找出這一輪要展開的葉節點。
+		int currentNodeIndex = 0;
+		Board selectedLeafBoard = currentBoard;
+		selectedLeafBoard.status = currentBoard.myPosition;
+		selectedLeafKey = hashKey;
+		int leafNodeIndex = -1;
+		while (nodes[currentNodeIndex].childrenNum > 0) {
+			double bestUCB = -1;
+			for (int childOffset = 0; childOffset < nodes[currentNodeIndex].childrenNum; ++childOffset) {
+				const int childNodeIndex = nodes[currentNodeIndex].childIndex[childOffset];
+				const double childUCB = UCB(childNodeIndex, totalTreeSimTimes);
+				if (childUCB > bestUCB) {
+					bestUCB = childUCB;
+					leafNodeIndex = childNodeIndex;
 				}
 			}
-			if (nodes[maxLeafIndex].drawnTile != -1) { // Depth > 1
-				maxLeaf.predictRemainTiles.TakeSpecificTile(nodes[maxLeafIndex].drawnTile);
-				specificTileNum = maxLeaf.privateHand.getTileNum(nodes[maxLeafIndex].drawnTile); // Modified
-				if (specificTileNum > 0) maxLeafKey ^= tileNumHash[(nodes[maxLeafIndex].drawnTile << 2) + specificTileNum - 1]; // Modified
-				maxLeaf.privateHand.AddHand(nodes[maxLeafIndex].drawnTile); // Modified
-				maxLeafKey ^= tileNumHash[(nodes[maxLeafIndex].drawnTile << 2) + specificTileNum]; // Modified
-				table->UpdateTableID(maxLeaf.tableID, nodes[maxLeafIndex].drawnTile, TAKE);
+			if (nodes[leafNodeIndex].drawnTile != -1) {
+				selectedLeafBoard.predictRemainTiles.TakeSpecificTile(nodes[leafNodeIndex].drawnTile);
+				tileCountInHand = selectedLeafBoard.privateHand.getTileNum(nodes[leafNodeIndex].drawnTile);
+				if (tileCountInHand > 0) {
+					selectedLeafKey ^= tileNumHash[(nodes[leafNodeIndex].drawnTile << 2) + tileCountInHand - 1];
+				}
+				selectedLeafBoard.privateHand.AddHand(nodes[leafNodeIndex].drawnTile);
+				selectedLeafKey ^= tileNumHash[(nodes[leafNodeIndex].drawnTile << 2) + tileCountInHand];
+				table->UpdateTableID(selectedLeafBoard.tableID, nodes[leafNodeIndex].drawnTile, TAKE);
 			}
-			if (nodes[maxLeafIndex].throwTile != -1) { // !Leaf node
-				specificTileNum = maxLeaf.privateHand.getTileNum(nodes[maxLeafIndex].throwTile); // Modified
-				maxLeafKey ^= tileNumHash[(nodes[maxLeafIndex].throwTile << 2) + specificTileNum - 1]; // Modified
-				MakeThrow(maxLeaf, nodes[maxLeafIndex].throwTile, false);
-				if (specificTileNum > 1) maxLeafKey ^= tileNumHash[(nodes[maxLeafIndex].throwTile << 2) + specificTileNum - 2]; // Modified
+			if (nodes[leafNodeIndex].throwTile != -1) {
+				tileCountInHand = selectedLeafBoard.privateHand.getTileNum(nodes[leafNodeIndex].throwTile);
+				selectedLeafKey ^= tileNumHash[(nodes[leafNodeIndex].throwTile << 2) + tileCountInHand - 1];
+				MakeThrow(selectedLeafBoard, nodes[leafNodeIndex].throwTile, false);
+				if (tileCountInHand > 1) {
+					selectedLeafKey ^= tileNumHash[(nodes[leafNodeIndex].throwTile << 2) + tileCountInHand - 2];
+				}
 			}
-			ptr = maxLeafIndex;
-			maxLeaf.status = currentBoard.myPosition;
+			currentNodeIndex = leafNodeIndex;
+			selectedLeafBoard.status = currentBoard.myPosition;
 		}
 
-		// Check if maxLeaf is terminate node or not
-		if (nodes[maxLeafIndex].isTerminateNode == true) {
-			nodes[maxLeafIndex].totalSimTimes += SIMULATION_NUM;
-			backwardPropagation(nodes[maxLeafIndex].parentIndex, 3, SIMULATION_NUM);
+		if (nodes[leafNodeIndex].isTerminateNode == true) {
+			nodes[leafNodeIndex].totalSimTimes += SIMULATION_NUM;
+			backwardPropagation(nodes[leafNodeIndex].parentIndex, 3, SIMULATION_NUM);
 			continue;
 		}
 
-		// Expansion
-		int drawClasses[34] = { 0 }, drawNum = maxLeaf.predictRemainTiles.getRemainTilesClasses(drawClasses);
+		// Expansion: 模擬目前葉節點所有可能摸進的牌，並建立下一層子節點。
+		int drawableTileTypes[kTileTypeCount] = { 0 };
+		const int drawableTileCount = selectedLeafBoard.predictRemainTiles.getRemainTilesClasses(drawableTileTypes);
 		double expectedScore = 0;
-		int maxLeafSimTimes = 0;
+		int expandedNodeSimTimes = 0;
+		for (int drawIndex = 0; drawIndex < drawableTileCount; ++drawIndex) {
+			Board postDrawBoard = selectedLeafBoard;
+			postDrawBoard.status = selectedLeafBoard.myPosition;
+			postDrawKey = selectedLeafKey;
 
+			const int drawnTile = drawableTileTypes[drawIndex];
+			const double drawProbability = (double)postDrawBoard.predictRemainTiles.getRemainTilesNum(drawnTile) / postDrawBoard.predictRemainTiles.getRemainTotalTilesNum();
 
-		for (int drawIndex = 0; drawIndex < drawNum; drawIndex++) {
-			Board drawLayerChld = maxLeaf;
-			drawLayerChld.status = maxLeaf.myPosition;
-			drawLayerKey = maxLeafKey; // Modified
+			postDrawBoard.predictRemainTiles.TakeSpecificTile(drawnTile);
+			tileCountInHand = postDrawBoard.privateHand.getTileNum(drawnTile);
+			if (tileCountInHand > 0) {
+				postDrawKey ^= tileNumHash[(drawnTile << 2) + tileCountInHand - 1];
+			}
+			postDrawBoard.privateHand.AddHand(drawnTile);
+			postDrawKey ^= tileNumHash[(drawnTile << 2) + tileCountInHand];
+			table->UpdateTableID(postDrawBoard.tableID, drawnTile, TAKE);
+			postDrawBoard.listenNum = table->getTilesListenNum(5 - postDrawBoard.publicGroupNum, postDrawBoard.tableID, postDrawBoard.is_have_eyes);
 
-			// Calculate the probability of drawing the card
-			double drawProbability = (double)drawLayerChld.predictRemainTiles.getRemainTilesNum(drawClasses[drawIndex]) / drawLayerChld.predictRemainTiles.getRemainTotalTilesNum();
+			if (postDrawBoard.listenNum == -1) {
+				nodes[leafNodeIndex].childIndex[(nodes[leafNodeIndex].childrenNum++)] = nodeCount;
+				if (nodes[leafNodeIndex].childrenNum >= 578) {
+					throw std::invalid_argument("In MCTS: childIndex out of range - 1\n");
+				}
+				nodes[nodeCount].averageScore = 3;
+				nodes[nodeCount].childrenNum = 0;
+				nodes[nodeCount].depth = nodes[leafNodeIndex].depth + 1;
+				nodes[nodeCount].drawnTile = drawnTile;
+				nodes[nodeCount].isTerminateNode = true;
+				nodes[nodeCount].parentIndex = leafNodeIndex;
+				nodes[nodeCount].throwTile = -1;
+				nodes[nodeCount].totalSimTimes = SIMULATION_NUM;
 
-			// Take the tile and update drawLayerChld info
-			drawLayerChld.predictRemainTiles.TakeSpecificTile(drawClasses[drawIndex]);
-			specificTileNum = drawLayerChld.privateHand.getTileNum(drawClasses[drawIndex]); // Modified
-			if (specificTileNum > 0) drawLayerKey ^= tileNumHash[(drawClasses[drawIndex] << 2) + specificTileNum - 1]; // Modified
-			drawLayerChld.privateHand.AddHand(drawClasses[drawIndex]); // Modified
-			drawLayerKey ^= tileNumHash[(drawClasses[drawIndex] << 2) + specificTileNum]; // Modified
-			table->UpdateTableID(drawLayerChld.tableID, drawClasses[drawIndex], TAKE);
-			drawLayerChld.listenNum = table->getTilesListenNum(5 - drawLayerChld.publicGroupNum, drawLayerChld.tableID, drawLayerChld.is_have_eyes);
-
-			// Check if self drawinf or not
-			if (drawLayerChld.listenNum == -1) {
-				// Expand a terminal node
-				nodes[maxLeafIndex].childIndex[(nodes[maxLeafIndex].childrenNum++)] = nodesSize;
-				if (nodes[maxLeafIndex].childrenNum >= 578) throw std::invalid_argument("In MCTS: childIndex out of range - 1\n");
-				nodes[nodesSize].averageScore = 3;
-				nodes[nodesSize].childrenNum = 0;
-				nodes[nodesSize].depth = nodes[maxLeafIndex].depth + 1;
-				nodes[nodesSize].drawnTile = drawClasses[drawIndex];
-				nodes[nodesSize].isTerminateNode = true;
-				nodes[nodesSize].parentIndex = maxLeafIndex;
-				nodes[nodesSize].throwTile = -1;
-				nodes[nodesSize].totalSimTimes = SIMULATION_NUM;
-
-				// Backward propagation
-				backwardPropagation(maxLeafIndex, 3, SIMULATION_NUM);
-
-				nodesSize++;
+				backwardPropagation(leafNodeIndex, 3, SIMULATION_NUM);
+				++nodeCount;
 				continue;
 			}
 
-			// Calculate maxLeaf's throwList
-			int drawLayerThrowList[17] = { 0 }, maxLeafThrowSize = ThrowList(drawLayerChld, drawLayerThrowList);
+			int postDrawThrowList[17] = { 0 };
+			const int postDrawThrowCount = ThrowList(postDrawBoard, postDrawThrowList);
+			if (postDrawThrowCount == 0) {
+				throw std::invalid_argument("In MCTS: ThrowList of maxLeaf is empty.\n");
+			}
 
-			// Check if maxLeaf's throw is empty or not
-			if (maxLeafThrowSize == 0) throw std::invalid_argument("In MCTS: ThrowList of maxLeaf is empty.\n");
+			int expandedChildrenScoreSum = 0;
+			int expandedChildrenSimTimes = 0;
+			for (int throwIndex = 0; throwIndex < postDrawThrowCount; ++throwIndex) {
+				if (nodes[leafNodeIndex].childrenNum >= 578) {
+					throw std::invalid_argument("In MCTS: childIndex out of range - 2\n");
+				}
+				const int expandingNodeIndex = nodeCount;
+				nodes[expandingNodeIndex].averageScore = 0;
+				nodes[expandingNodeIndex].childrenNum = 0;
+				nodes[expandingNodeIndex].depth = nodes[leafNodeIndex].depth + 1;
+				nodes[expandingNodeIndex].drawnTile = drawnTile;
+				nodes[expandingNodeIndex].isTerminateNode = false;
+				nodes[expandingNodeIndex].parentIndex = leafNodeIndex;
+				nodes[expandingNodeIndex].throwTile = postDrawThrowList[throwIndex];
+				nodes[expandingNodeIndex].totalSimTimes = 0;
 
-			int expandedChldrenScores = 0, expandedChldrenSimtimes = 0; // Record total scores and total simTimes
-			for (int i = 0; i < maxLeafThrowSize; i++) {
-				if (nodes[maxLeafIndex].childrenNum >= 578) throw std::invalid_argument("In MCTS: childIndex out of range - 2\n");
-				nodes[nodesSize].averageScore = 0;
-				nodes[nodesSize].childrenNum = 0;
-				nodes[nodesSize].depth = nodes[maxLeafIndex].depth + 1;
-				nodes[nodesSize].drawnTile = drawClasses[drawIndex];
-				nodes[nodesSize].isTerminateNode = false;
-				nodes[nodesSize].parentIndex = maxLeafIndex;
-				nodes[nodesSize].throwTile = drawLayerThrowList[i];
-				nodes[nodesSize].totalSimTimes = 0;
-
-				// Check tt
-				specificTileNum = drawLayerChld.privateHand.getTileNum(drawLayerThrowList[i]); // Modified
-				queryKey = drawLayerKey ^ tileNumHash[(drawLayerThrowList[i] << 2) + specificTileNum - 1]; // Modified
-				if (specificTileNum > 1) queryKey ^= tileNumHash[(drawLayerThrowList[i] << 2) + specificTileNum - 2]; // Modified
-				nodes[maxLeafIndex].childIndex[(nodes[maxLeafIndex].childrenNum++)] = nodesSize;
-				hashIndex = (unsigned int)(queryKey & mask); // Modified
-				if (tt[hashIndex].simNum >= SIMULATION_NUM && tt[hashIndex].key == queryKey) { // Hit // Modified
+				tileCountInHand = postDrawBoard.privateHand.getTileNum(postDrawThrowList[throwIndex]);
+				queryKey = postDrawKey ^ tileNumHash[(postDrawThrowList[throwIndex] << 2) + tileCountInHand - 1];
+				if (tileCountInHand > 1) {
+					queryKey ^= tileNumHash[(postDrawThrowList[throwIndex] << 2) + tileCountInHand - 2];
+				}
+				nodes[leafNodeIndex].childIndex[(nodes[leafNodeIndex].childrenNum++)] = expandingNodeIndex;
+				hashIndex = (unsigned int)(queryKey & mask);
+				if (tt[hashIndex].simNum >= SIMULATION_NUM && tt[hashIndex].key == queryKey) {
 #ifdef LOG_COLLISION
-					hitNum++; // Modified
+					++ttHitCount;
 #endif
-					nodes[nodesSize].totalSimTimes += tt[hashIndex].simNum; // Modified
-					nodes[nodesSize].averageScore = (double)tt[hashIndex].simScore / tt[hashIndex].simNum; // Modified
+					nodes[expandingNodeIndex].totalSimTimes += tt[hashIndex].simNum;
+					nodes[expandingNodeIndex].averageScore = (double)tt[hashIndex].simScore / tt[hashIndex].simNum;
 
-					expandedChldrenScores += tt[hashIndex].simScore; // Modified
-					expandedChldrenSimtimes += tt[hashIndex].simNum; // Modified
-
-					treeSimTimes += tt[hashIndex].simNum; // Modified
+					expandedChildrenScoreSum += tt[hashIndex].simScore;
+					expandedChildrenSimTimes += tt[hashIndex].simNum;
+					totalTreeSimTimes += tt[hashIndex].simNum;
 				}
 				else {
-					if (tt[hashIndex].simNum > 0 && tt[hashIndex].key != queryKey) { // Collision // Modified
+					if (tt[hashIndex].simNum > 0 && tt[hashIndex].key != queryKey) {
 #ifdef LOG_COLLISION
-						hitNum++; // Modified
-						clsNum++; //Modified
+						++ttHitCount;
+						++ttCollisionCount;
 #endif
 					}
 
-					std::atomic<int> nodeScores = 9, nodeSimTimes = 0;
-					pool.parallelize_loop(0, SIMULATION_NUM, [this, &drawLayerChld, &drawLayerThrowList, &i, &nodesSize, &nodeScores, &nodeSimTimes](const int& q, const int& w) {
-						int oppThrowNum = 3 * (nodes[nodesSize].depth - 1);
-						if (drawLayerChld.predictRemainTiles.getRemainTotalTilesNum() - oppThrowNum <= 64 - oppGroup) { // Draw
-							nodeSimTimes += (w - q);
+					std::atomic<int> nodeScoreSum = 9;
+					std::atomic<int> nodeSimTimes = 0;
+					pool.parallelize_loop(0, SIMULATION_NUM, [this, &postDrawBoard, &postDrawThrowList, &throwIndex, &expandingNodeIndex, &nodeScoreSum, &nodeSimTimes](const int& beginIndex, const int& endIndex) {
+						const int opponentThrowCount = 3 * (nodes[expandingNodeIndex].depth - 1);
+						if (postDrawBoard.predictRemainTiles.getRemainTotalTilesNum() - opponentThrowCount <= 64 - oppGroup) {
+							nodeSimTimes += (endIndex - beginIndex);
 							return;
 						}
-						for (int a = q; a < w; ++a) {
-							Board expandedChild = drawLayerChld;
-							expandedChild.status = drawLayerChld.myPosition;
-							// Randomly throw tiles (opponents' thrown cards)
-							for (int oppThrowCnt = 0; oppThrowCnt < oppThrowNum; oppThrowCnt++)
-								expandedChild.predictRemainTiles.TakeTile();
+						for (int rolloutIndex = beginIndex; rolloutIndex < endIndex; ++rolloutIndex) {
+							Board expandedChildBoard = postDrawBoard;
+							expandedChildBoard.status = postDrawBoard.myPosition;
+							for (int opponentThrowIndex = 0; opponentThrowIndex < opponentThrowCount; ++opponentThrowIndex) {
+								expandedChildBoard.predictRemainTiles.TakeTile();
+							}
 
-							nodeScores += Simulate(expandedChild, drawLayerThrowList[i]);
+							nodeScoreSum += Simulate(expandedChildBoard, postDrawThrowList[throwIndex]);
 							nodeSimTimes++;
 						}
 						});
 
-					treeSimTimes += nodeSimTimes; // Modified
-
-					// Update tt
+					totalTreeSimTimes += nodeSimTimes;
 					if (tt[hashIndex].simNum == 0) {
-						tt[hashIndex].key = queryKey; // Modified
-						tt[hashIndex].simNum = nodeSimTimes; // Modified
-						tt[hashIndex].simScore = nodeScores; // Modified
+						tt[hashIndex].key = queryKey;
+						tt[hashIndex].simNum = nodeSimTimes;
+						tt[hashIndex].simScore = nodeScoreSum;
 					}
 					else if (tt[hashIndex].key == queryKey) {
-						tt[hashIndex].simNum += nodeSimTimes; // Modified
-						tt[hashIndex].simScore += nodeScores; // Modified
+						tt[hashIndex].simNum += nodeSimTimes;
+						tt[hashIndex].simScore += nodeScoreSum;
 					}
 
-
-					nodes[nodesSize].totalSimTimes += nodeSimTimes;
-					nodes[nodesSize].averageScore = (double)nodeScores / nodeSimTimes;
-
-					expandedChldrenScores += nodeScores;
-					expandedChldrenSimtimes += nodeSimTimes;
+					nodes[expandingNodeIndex].totalSimTimes += nodeSimTimes;
+					nodes[expandingNodeIndex].averageScore = (double)nodeScoreSum / nodeSimTimes;
+					expandedChildrenScoreSum += nodeScoreSum;
+					expandedChildrenSimTimes += nodeSimTimes;
 				}
 
-				nodesSize++;
-				if (nodesSize >= SHRT_MAX) throw std::invalid_argument("In MCTS: Size of nodes[] is too small.\n");
+				++nodeCount;
+				if (nodeCount >= SHRT_MAX) {
+					throw std::invalid_argument("In MCTS: Size of nodes[] is too small.\n");
+				}
 			}
-			maxLeafSimTimes += expandedChldrenSimtimes;
-			expectedScore += drawProbability * (double)expandedChldrenScores / expandedChldrenSimtimes;
+			expandedNodeSimTimes += expandedChildrenSimTimes;
+			expectedScore += drawProbability * (double)expandedChildrenScoreSum / expandedChildrenSimTimes;
 		}
-		backwardPropagation(maxLeafIndex, expectedScore, maxLeafSimTimes);
+		backwardPropagation(leafNodeIndex, expectedScore, expandedNodeSimTimes);
 	}
-	for (int i = 0; i < throwListSize; i++) nodes[1 + i].throwTile = thrownTileToIndex[nodes[1 + i].throwTile];
-	treeSize = nodesSize;
+	for (int candidateIndex = 0; candidateIndex < throwListSize; ++candidateIndex) {
+		nodes[1 + candidateIndex].throwTile = rootChildIndexByTile[nodes[1 + candidateIndex].throwTile];
+	}
+	treeSize = nodeCount;
 
 #ifdef LOG_COLLISION
-	std::ofstream clsLog("clsLog.csv", std::ios::app); // Modified
-	clsLog << clsNum << "," << hitNum << "\n"; // Modified
-	clsLog.close(); // Modified
+	std::ofstream clsLog("clsLog.csv", std::ios::app);
+	clsLog << ttCollisionCount << "," << ttHitCount << "\n";
+	clsLog.close();
 #endif
-	//}
 }
-
 
 //-----------------------------  Tools  -----------------------------------
 
-int AI::Partition(int* arr, int front, int end) {
-	float pivot = nodes[nodes[0].childIndex[arr[end]]].averageScore;
-	int i = front - 1;
-	for (int j = front; j < end; ++j) {
-		if (nodes[nodes[0].childIndex[arr[j]]].averageScore > pivot) {
-			i++;
-			std::swap(arr[i], arr[j]);
+int AI::Partition(int* childOrder, int left, int right) {
+	const double pivotScore = nodes[nodes[0].childIndex[childOrder[right]]].averageScore;
+	int partitionIndex = left - 1;
+	for (int currentIndex = left; currentIndex < right; ++currentIndex) {
+		if (nodes[nodes[0].childIndex[childOrder[currentIndex]]].averageScore > pivotScore) {
+			++partitionIndex;
+			std::swap(childOrder[partitionIndex], childOrder[currentIndex]);
 		}
 	}
-	i++;
-	std::swap(arr[i], arr[end]);
-	return i;
+	++partitionIndex;
+	std::swap(childOrder[partitionIndex], childOrder[right]);
+	return partitionIndex;
 }
 
-void AI::QuickSort(int* arr, int front, int end) {
-	if (front < end) {
-		int pivot = Partition(arr, front, end);
-		QuickSort(arr, front, pivot - 1);
-		QuickSort(arr, pivot + 1, end);
+void AI::QuickSort(int* childOrder, int left, int right) {
+	if (left < right) {
+		const int pivotIndex = Partition(childOrder, left, right);
+		QuickSort(childOrder, left, pivotIndex - 1);
+		QuickSort(childOrder, pivotIndex + 1, right);
 	}
 }
