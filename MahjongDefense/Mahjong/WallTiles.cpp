@@ -32,6 +32,10 @@ int WallTiles::getTileSeaTileNum(const int& card) const {
 	return appearTileNum[card];
 }
 
+int WallTiles::getAllTileSeaCount() const {
+	return tileSea.size();
+}
+
 vector<int> WallTiles::getAllTileSea() const {
 	vector<int> card(tileSea);
 	return card;

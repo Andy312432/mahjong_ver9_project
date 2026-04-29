@@ -999,11 +999,13 @@ vector<vector<vector<int>>> Table::findThrowlist(int* tempArray, int* tempNumArr
 	return newDismantlingResult;
 }
 
+//拆牌分析, tableID目前手牌
 int Table::getDismantling(int* tableID, bool& is_have_eyes, ThrowSet* dismantlingSearchResult, int *startPosition, int throwContentType[][4]) /*const*/ {
 	ThrowSet throwSet[50];
 	int throwSetPosition[5] = { 0 }, typeArray[4] = { 0 };
 	int typeArraySize(0), length = 0, sum = 0, startPositionSize = 0;
 	for (int i = 0; i < 3; i++) {
+		//萬筒條
 		if (tableID[i]) {
 			if (is_have_eyes && (dismantlingEyeSize[tableID[i]] - dismantlingEyeSize[tableID[i] - 1]) != 0) {
 				for (int j = dismantlingEyeSize[tableID[i] - 1]; j < dismantlingEyeSize[tableID[i]]; j++) {
@@ -1023,6 +1025,7 @@ int Table::getDismantling(int* tableID, bool& is_have_eyes, ThrowSet* dismantlin
 			}
 		}
 	}
+	//字
 	if (tableID[3]) {
 		if (is_have_eyes && (dismantlingWordEyeSize[tableID[3]] - dismantlingWordEyeSize[tableID[3] - 1]) != 0) {
 			for (int j = dismantlingWordEyeSize[tableID[3] - 1]; j < dismantlingWordEyeSize[tableID[3]]; j++) {

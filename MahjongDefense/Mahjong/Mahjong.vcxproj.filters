@@ -13,108 +13,132 @@
       <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
       <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
     </Filter>
+    <Filter Include="標頭檔\Board">
+      <UniqueIdentifier>{3fcf5163-8663-4bc1-82fc-558e1c8cb749}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="標頭檔\AI">
+      <UniqueIdentifier>{45fdd3aa-fe86-40c5-9a2d-a0c748837139}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="來源檔案\AI">
+      <UniqueIdentifier>{30684aca-28c2-48f8-894d-b025dab10192}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="來源檔案\Board">
+      <UniqueIdentifier>{468dfe40-dcf8-4db2-af3a-1ace733f19ec}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="來源檔案\Test">
+      <UniqueIdentifier>{e80465a9-6255-41b5-a8d5-779ddf4fabd2}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="標頭檔\Test">
+      <UniqueIdentifier>{bd80fb8f-1374-46be-bb20-3f4b9b90b0b2}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="標頭檔\Utils">
+      <UniqueIdentifier>{8ea143ec-8e6d-49a8-accd-9199151ed488}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="來源檔案\Utils">
+      <UniqueIdentifier>{39590380-0f24-4d96-9498-5527c69c368c}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Player.cpp">
       <Filter>來源檔案</Filter>
     </ClCompile>
-    <ClCompile Include="PrivateHand.cpp">
-      <Filter>來源檔案</Filter>
-    </ClCompile>
-    <ClCompile Include="WallTiles.cpp">
-      <Filter>來源檔案</Filter>
-    </ClCompile>
-    <ClCompile Include="PublicHand.cpp">
-      <Filter>來源檔案</Filter>
-    </ClCompile>
-    <ClCompile Include="PredictRemainTiles.cpp">
-      <Filter>來源檔案</Filter>
-    </ClCompile>
-    <ClCompile Include="AI.cpp">
-      <Filter>來源檔案</Filter>
-    </ClCompile>
-    <ClCompile Include="Human.cpp">
-      <Filter>來源檔案</Filter>
-    </ClCompile>
-    <ClCompile Include="Tools.cpp">
-      <Filter>來源檔案</Filter>
-    </ClCompile>
-    <ClCompile Include="Mahjong.cpp">
-      <Filter>來源檔案</Filter>
-    </ClCompile>
-    <ClCompile Include="Table.cpp">
-      <Filter>來源檔案</Filter>
-    </ClCompile>
     <ClCompile Include="Game.cpp">
       <Filter>來源檔案</Filter>
     </ClCompile>
+    <ClCompile Include="DefenseAnalyze.cpp">
+      <Filter>來源檔案\AI</Filter>
+    </ClCompile>
+    <ClCompile Include="AI.cpp">
+      <Filter>來源檔案\AI</Filter>
+    </ClCompile>
+    <ClCompile Include="PredictRemainTiles.cpp">
+      <Filter>來源檔案\AI</Filter>
+    </ClCompile>
+    <ClCompile Include="WallTiles.cpp">
+      <Filter>來源檔案\Board</Filter>
+    </ClCompile>
+    <ClCompile Include="PublicHand.cpp">
+      <Filter>來源檔案\Board</Filter>
+    </ClCompile>
+    <ClCompile Include="PrivateHand.cpp">
+      <Filter>來源檔案\Board</Filter>
+    </ClCompile>
+    <ClCompile Include="Mahjong.cpp">
+      <Filter>來源檔案\Board</Filter>
+    </ClCompile>
     <ClCompile Include="testMain.cpp">
-      <Filter>來源檔案</Filter>
+      <Filter>來源檔案\Test</Filter>
+    </ClCompile>
+    <ClCompile Include="Human.cpp">
+      <Filter>來源檔案\Test</Filter>
     </ClCompile>
     <ClCompile Include="spinLock.hpp">
-      <Filter>標頭檔</Filter>
+      <Filter>標頭檔\Utils</Filter>
     </ClCompile>
-    <ClCompile Include="DefenseAnalyze.cpp">
-      <Filter>來源檔案</Filter>
+    <ClCompile Include="Tools.cpp">
+      <Filter>來源檔案\Utils</Filter>
     </ClCompile>
     <ClCompile Include="TT.cpp">
-      <Filter>來源檔案</Filter>
+      <Filter>來源檔案\Utils</Filter>
+    </ClCompile>
+    <ClCompile Include="Table.cpp">
+      <Filter>來源檔案\Utils</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="Table.h">
-      <Filter>標頭檔</Filter>
-    </ClInclude>
     <ClInclude Include="Player.h">
-      <Filter>標頭檔</Filter>
-    </ClInclude>
-    <ClInclude Include="PrivateHand.h">
-      <Filter>標頭檔</Filter>
-    </ClInclude>
-    <ClInclude Include="WallTiles.h">
-      <Filter>標頭檔</Filter>
-    </ClInclude>
-    <ClInclude Include="PublicHand.h">
-      <Filter>標頭檔</Filter>
-    </ClInclude>
-    <ClInclude Include="PredictRemainTiles.h">
-      <Filter>標頭檔</Filter>
-    </ClInclude>
-    <ClInclude Include="AI.h">
-      <Filter>標頭檔</Filter>
-    </ClInclude>
-    <ClInclude Include="Human.h">
-      <Filter>標頭檔</Filter>
-    </ClInclude>
-    <ClInclude Include="GameStatue.h">
-      <Filter>標頭檔</Filter>
-    </ClInclude>
-    <ClInclude Include="mahjong.h">
-      <Filter>標頭檔</Filter>
-    </ClInclude>
-    <ClInclude Include="thread_pool.hpp">
-      <Filter>標頭檔</Filter>
-    </ClInclude>
-    <ClInclude Include="pcg_extras.hpp">
-      <Filter>標頭檔</Filter>
-    </ClInclude>
-    <ClInclude Include="pcg_random.hpp">
-      <Filter>標頭檔</Filter>
-    </ClInclude>
-    <ClInclude Include="pcg_uint128.hpp">
-      <Filter>標頭檔</Filter>
-    </ClInclude>
-    <ClInclude Include="ControllerTest.h">
       <Filter>標頭檔</Filter>
     </ClInclude>
     <ClInclude Include="Game.h">
       <Filter>標頭檔</Filter>
     </ClInclude>
-    <ClInclude Include="TT.h">
-      <Filter>標頭檔</Filter>
+    <ClInclude Include="PrivateHand.h">
+      <Filter>標頭檔\Board</Filter>
+    </ClInclude>
+    <ClInclude Include="PublicHand.h">
+      <Filter>標頭檔\Board</Filter>
+    </ClInclude>
+    <ClInclude Include="AI.h">
+      <Filter>標頭檔\AI</Filter>
+    </ClInclude>
+    <ClInclude Include="PredictRemainTiles.h">
+      <Filter>標頭檔\AI</Filter>
     </ClInclude>
     <ClInclude Include="DefenseAnalyze.h">
-      <Filter>標頭檔</Filter>
+      <Filter>標頭檔\AI</Filter>
+    </ClInclude>
+    <ClInclude Include="mahjong.h">
+      <Filter>標頭檔\Board</Filter>
+    </ClInclude>
+    <ClInclude Include="GameStatue.h">
+      <Filter>標頭檔\Board</Filter>
+    </ClInclude>
+    <ClInclude Include="Human.h">
+      <Filter>標頭檔\Test</Filter>
+    </ClInclude>
+    <ClInclude Include="ControllerTest.h">
+      <Filter>標頭檔\Test</Filter>
+    </ClInclude>
+    <ClInclude Include="pcg_extras.hpp">
+      <Filter>標頭檔\Utils</Filter>
+    </ClInclude>
+    <ClInclude Include="pcg_random.hpp">
+      <Filter>標頭檔\Utils</Filter>
+    </ClInclude>
+    <ClInclude Include="pcg_uint128.hpp">
+      <Filter>標頭檔\Utils</Filter>
+    </ClInclude>
+    <ClInclude Include="thread_pool.hpp">
+      <Filter>標頭檔\Utils</Filter>
+    </ClInclude>
+    <ClInclude Include="WallTiles.h">
+      <Filter>標頭檔\Board</Filter>
+    </ClInclude>
+    <ClInclude Include="TT.h">
+      <Filter>標頭檔\Utils</Filter>
+    </ClInclude>
+    <ClInclude Include="Table.h">
+      <Filter>標頭檔\Utils</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

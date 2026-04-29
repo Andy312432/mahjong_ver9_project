@@ -66,8 +66,10 @@ int main() {
 		string ready;
 		getline(cin, ready);
 		if (ready == "/ready") {
+#if _DEBUG
 			cout << "ATTACH DEBUGGER!"<<endl;
 			Sleep(5000);
+#endif
 			cout << "/ready" << endl << flush;
 			break;
 		}

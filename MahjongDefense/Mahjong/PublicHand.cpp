@@ -10,6 +10,7 @@
 
 PublicHand::PublicHand() {
 	Tiles.reserve(17);
+	Reasons.reserve(17);
 }
 
 bool PublicHand::findGroup(const vector<int>& card) {
@@ -40,12 +41,35 @@ int PublicHand::getGroupNum() const {
 	return (int)Tiles.size();
 }
 
+int PublicHand::getGroupNumByReason(Action reason) const {
+	int count = 0;
+	for (int i = 0; i < (int)Reasons.size(); i++) {
+		if (Reasons[i] == reason) {
+			count++;
+		}
+	}
+	return count;
+}
+
+int PublicHand::getEatPongGroupNum() const {
+	return getGroupNumByReason(EAT) + getGroupNumByReason(PONG);
+}
+
+Action PublicHand::getReason(int groupIndex) const {
+	return Reasons[groupIndex];
+}
+
 vector< vector<int> > PublicHand::getTiles() const {
 	return Tiles;
 }
 
-void PublicHand::AddHand(const vector<int>& card, boost::multiprecision::uint256_t& hashKey, short* oppTileNum) {
+vector<Action> PublicHand::getReasons() const {
+	return Reasons;
+}
+
+void PublicHand::AddHand(const vector<int>& card, Action reason, boost::multiprecision::uint256_t& hashKey, short* oppTileNum) {
 	Tiles.push_back(card);
+	Reasons.push_back(reason);
 	for (int i = 0; i < card.size(); i++) { // Modified
 		short cardClass = (card[i] / 100 - 1) * 9 + (card[i] / 10 % 10 - 1); // Modified
 		if (oppTileNum[cardClass] > 0) hashKey ^= oppTileNumHash[(cardClass << 2) + oppTileNum[cardClass] - 1]; // Modified
@@ -53,8 +77,17 @@ void PublicHand::AddHand(const vector<int>& card, boost::multiprecision::uint256
 	}
 }
 
-void PublicHand::AddHand(const vector<int>& card) {
+void PublicHand::AddHand(const vector<int>& card, boost::multiprecision::uint256_t& hashKey, short* oppTileNum) {
+	AddHand(card, TAKE, hashKey, oppTileNum);
+}
+
+void PublicHand::AddHand(const vector<int>& card, Action reason) {
 	Tiles.push_back(card);
+	Reasons.push_back(reason);
+}
+
+void PublicHand::AddHand(const vector<int>& card) {
+	AddHand(card, TAKE);
 }
 
 void PublicHand::AddBuGong(const int& card, boost::multiprecision::uint256_t& hashKey, short* oppTileNum) {
@@ -69,6 +102,7 @@ void PublicHand::AddBuGong(const int& card, boost::multiprecision::uint256_t& ha
 		int tempB = ((*it)[0] / 10) % 10;
 		if (tempA == a && tempB == b) {
 			(*it).push_back(card);
+			Reasons[it - Tiles.begin()] = BU_GONG;
 		}
 	}
 }
@@ -82,6 +116,7 @@ void PublicHand::AddBuGong(const int& card) {
 		int tempB = ((*it)[0] / 10) % 10;
 		if (tempA == a && tempB == b) {
 			(*it).push_back(card);
+			Reasons[it - Tiles.begin()] = BU_GONG;
 		}
 	}
 }

@@ -11,7 +11,7 @@ class WallTiles {
 private:
 	vector<int> tileSea;
 	
-	int appearTileNum[34] = { 0 }; // record appear tiles
+	int appearTileNum[34] = { 0 }; // record appear tiles count
 public:
 	WallTiles();
 
@@ -21,6 +21,7 @@ public:
 	int getTileSeaTileNum(const int& card) const;
 
 	vector<int> getAllTileSea() const;
+	int getAllTileSeaCount() const;
 
 	void AddTileSea(const int& card);
 	void deleteTileSea();

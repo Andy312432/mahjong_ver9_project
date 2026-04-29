@@ -66,7 +66,7 @@ void Player::dealCommand(const int& Command, const vector<int>& Data) {
 	case 3: { // eat
 		vector<int> temp(Data.begin() + 1, Data.end());
 		if (Data[0] == ID) { /// 我方吃牌 (不用更新以出現的牌集合，因為我方摸到牌時就已經更新過了)
-			publicHand[Data[0] - 1].AddHand(temp); /// 新增該玩家的明牌資訊 // Modified
+			publicHand[Data[0] - 1].AddHand(temp, EAT); /// 新增該玩家的明牌資訊 // Modified
 			privateHand.RemoveHand(Data[1], hashKey); // Modified
 			privateHand.RemoveHand(Data[3], hashKey); // Modified
 			vector<int> throwTile(1, Data[1]);
@@ -74,7 +74,7 @@ void Player::dealCommand(const int& Command, const vector<int>& Data) {
 			MoveThrow(throwTile);
 		}
 		else if (mode == 0) { // AI mode & record others player
-			publicHand[Data[0] - 1].AddHand(temp, hashKey, oppTileNum); /// 新增該玩家的明牌資訊 // Modified
+			publicHand[Data[0] - 1].AddHand(temp, EAT, hashKey, oppTileNum); /// 新增該玩家的明牌資訊 // Modified
 			DealRemainTiles(Data[1]);
 			DealRemainTiles(Data[3]); /// 把牌加到已經出現的牌集合中
 
@@ -87,7 +87,7 @@ void Player::dealCommand(const int& Command, const vector<int>& Data) {
 		vector<int> throwTile;
 		int throwCard = wallTiles.getTileSea();
 		if (Data[0] == ID) { // Modified
-			publicHand[Data[0] - 1].AddHand(temp); /// 新增該玩家的明牌資訊 // Modified
+			publicHand[Data[0] - 1].AddHand(temp, PONG); /// 新增該玩家的明牌資訊 // Modified
 			for (int i = 1; i <= 3; i++) {
 				if (Data[i] != throwCard) {
 					privateHand.RemoveHand(Data[i], hashKey); // Modified
@@ -97,7 +97,7 @@ void Player::dealCommand(const int& Command, const vector<int>& Data) {
 			MoveThrow(throwTile);
 		}
 		else if (mode == 0) { // AI mode & record others player // Modified
-			publicHand[Data[0] - 1].AddHand(temp, hashKey, oppTileNum); /// 新增該玩家的明牌資訊 // Modified
+			publicHand[Data[0] - 1].AddHand(temp, PONG, hashKey, oppTileNum); /// 新增該玩家的明牌資訊 // Modified
 			for (int i = 1; i <= 3; i++) {
 				if (Data[i] != throwCard) {
 					DealRemainTiles(Data[i]);
@@ -118,7 +118,7 @@ void Player::dealCommand(const int& Command, const vector<int>& Data) {
 		vector<int> temp(Data.begin() + 2, Data.end());
 		int throwCard = wallTiles.getTileSea();
 		if (Data[0] == ID) { // Modiifed
-			publicHand[Data[0] - 1].AddHand(temp); /// 新增該玩家的明牌資訊 // Modified
+			publicHand[Data[0] - 1].AddHand(temp, MING_GONG); /// 新增該玩家的明牌資訊 // Modified
 			for (int i = 2; i <= 5; i++) {
 				if (Data[i] != throwCard) {
 					privateHand.RemoveHand(Data[i], hashKey); // Modified
@@ -128,7 +128,7 @@ void Player::dealCommand(const int& Command, const vector<int>& Data) {
 			MoveThrow(throwTile);
 		}
 		else if (mode == 0) { // Modified
-			publicHand[Data[0] - 1].AddHand(temp, hashKey, oppTileNum); /// 新增該玩家的明牌資訊 // Modified
+			publicHand[Data[0] - 1].AddHand(temp, MING_GONG, hashKey, oppTileNum); /// 新增該玩家的明牌資訊 // Modified
 			for (int i = 2; i <= 5; i++) {
 				if (Data[i] != throwCard) {
 					// AI mode & record others player
@@ -142,7 +142,7 @@ void Player::dealCommand(const int& Command, const vector<int>& Data) {
 	case 7: { // DarkGong
 		if (Data[0] == ID) {
 			vector<int> temp(Data.begin() + 2, Data.end());
-			publicHand[Data[0] - 1].AddHand(temp);
+			publicHand[Data[0] - 1].AddHand(temp, DARK_GONG);
 			privateHand.RemoveHand(Data[2], hashKey); // Modified
 			privateHand.RemoveHand(Data[3], hashKey); // Modified
 			privateHand.RemoveHand(Data[4], hashKey); // Modified
@@ -155,7 +155,7 @@ void Player::dealCommand(const int& Command, const vector<int>& Data) {
 		}
 		else {
 			vector<int> temp(4, 0);
-			publicHand[Data[0] - 1].AddHand(temp);
+			publicHand[Data[0] - 1].AddHand(temp, DARK_GONG);
 			oppGroup += 4;
 		}
 		break;
