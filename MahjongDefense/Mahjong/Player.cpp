@@ -40,6 +40,7 @@ void Player::dealCommand(const int& Command, const vector<int>& Data) {
 	case 1: { // take
 		//printf("Take card: %d\n", Data[0]);
 		privateHand.AddHand(Data[0], hashKey);
+		takeTile = Data[0];
 		DealTake(Data[0]);//將資料更新（並無決斷）
 		if (mode == 0)
 			DealRemainTiles(Data[0]);
@@ -49,7 +50,7 @@ void Player::dealCommand(const int& Command, const vector<int>& Data) {
 		break;
 	}
 	case 2: { // throw
-		wallTiles.AddTileSea(Data[1]);
+		wallTiles.AddTileSea(Data[0] - 1, Data[1], Data[0] == ID && Data[1] == takeTile);
 		if (Data[0] == ID) {
 			vector<int> throwTile(1, Data[1]);
 			privateHand.RemoveHand(Data[1], hashKey); // Modified

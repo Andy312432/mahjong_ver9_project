@@ -26,7 +26,7 @@
 #define DISMANTLING_MODE 0 // 0: dismantling, 1: follow listenTable to find
 #define USED_MCTS 0 // 1: MCTS
 #define TIME_LIMIT 0
-#define LIMIT_TIME 27000 // 2850 // Modified(original: 3500)
+#define LIMIT_TIME 2850 // 2850 // Modified(original: 3500)
 
 // 0 :if condition meet min tileNum or min the holeNum put in the throwArray.
 // 1 :add the tileNum & the holeNum, find the minimal.

@@ -41,6 +41,41 @@ vector<int> WallTiles::getAllTileSea() const {
 	return card;
 }
 
+vector<int> WallTiles::getPlayerTileSea(const int& playerIndex) const {
+	vector<int> cards;
+	for (int i = 0; i < int(discardRecords.size()); i++) {
+		if (discardRecords[i].playerIndex == playerIndex) {
+			cards.push_back(discardRecords[i].card);
+		}
+	}
+	return cards;
+}
+
+vector<DiscardRecord> WallTiles::getPlayerDiscardRecords(const int& playerIndex) const {
+	vector<DiscardRecord> records;
+	for (int i = 0; i < int(discardRecords.size()); i++) {
+		if (discardRecords[i].playerIndex == playerIndex) {
+			records.push_back(discardRecords[i]);
+		}
+	}
+	return records;
+}
+
+vector<DiscardRecord> WallTiles::getAllDiscardRecords() const {
+	vector<DiscardRecord> records(discardRecords);
+	return records;
+}
+
+int WallTiles::getPlayerTileSeaCount(const int& playerIndex) const {
+	int count = 0;
+	for (int i = 0; i < int(discardRecords.size()); i++) {
+		if (discardRecords[i].playerIndex == playerIndex) {
+			count++;
+		}
+	}
+	return count;
+}
+
 // add tile sea
 void WallTiles::AddTileSea(const int& card) {
 	int temp = card;
@@ -54,6 +89,17 @@ void WallTiles::AddTileSea(const int& card) {
 		throw std::out_of_range("Add TileSea Error : appear times is over 4");
 	}
 	tileSea.push_back(temp);
+	DiscardRecord record;
+	record.playerIndex = -1;
+	record.card = temp;
+	record.isTsumogiri = false;
+	discardRecords.push_back(record);
+}
+
+void WallTiles::AddTileSea(const int& playerIndex, const int& card, const bool& isTsumogiri) {
+	AddTileSea(card);
+	discardRecords.back().playerIndex = playerIndex;
+	discardRecords.back().isTsumogiri = isTsumogiri;
 }
 
 // delete tile sea
@@ -69,6 +115,9 @@ void WallTiles::deleteTileSea() {
 		throw std::out_of_range("Delete TileSea Error : appear times is 0");
 	}	
 	tileSea.pop_back();
+	if (!discardRecords.empty()) {
+		discardRecords.pop_back();
+	}
 }
 
 void WallTiles::ShowTileSea() const {

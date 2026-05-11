@@ -18,6 +18,9 @@
     <ClCompile Include="..\Mahjong\ClientStdinMain.cpp">
       <Filter>來源檔案</Filter>
     </ClCompile>
+    <ClCompile Include="..\Mahjong\TableGuard.cpp">
+      <Filter>來源檔案</Filter>
+    </ClCompile>
     <ClCompile Include="..\Mahjong\TT.cpp">
       <Filter>來源檔案</Filter>
     </ClCompile>
